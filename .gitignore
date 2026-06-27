@@ -1,0 +1,33 @@
+# Gradle files
+.gradle/
+build/
+
+# Local configuration file (sdk path, etc)
+local.properties
+
+# Log/OS Files
+*.log
+.DS_Store
+Thumbs.db
+
+# Android Studio generated files and folders
+captures/
+.externalNativeBuild/
+.cxx/
+*.aab
+*.apk
+output-metadata.json
+
+# IntelliJ IDEA files (ignore the entire folder to avoid merge conflicts)
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Keystore files (signing keys)
+*.jks
+*.keystore
+*.pepk
+
+# Crashlytics/Firebase build artifacts
+core-plugins.properties
