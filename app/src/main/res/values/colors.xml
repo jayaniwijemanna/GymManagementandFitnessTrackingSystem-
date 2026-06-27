@@ -2,4 +2,48 @@
 <resources>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+
+    <!-- Design System Colors -->
+    <color name="primary">#007AFF</color>
+    <color name="primary_dark">#0056CC</color>
+    <color name="primary_light">#3395FF</color>
+    <color name="secondary">#0A0A0A</color>
+    <color name="tertiary">#1C1C1E</color>
+    <color name="neutral">#F2F2F7</color>
+
+    <!-- Backgrounds -->
+    <color name="bg_main">#0A0B0D</color>
+    <color name="bg_card">#151821</color>
+    <color name="bg_card_elevated">#1C1F2A</color>
+    <color name="bg_nav">#111318</color>
+    <color name="bg_surface">#0F1117</color>
+
+    <!-- Text Colors -->
+    <color name="text_white">#FFFFFF</color>
+    <color name="text_primary">#E5E7EB</color>
+    <color name="text_gray">#94A3B8</color>
+    <color name="text_hint">#4A5568</color>
+    <color name="text_muted">#636B78</color>
+
+    <!-- Accent Colors -->
+    <color name="accent_blue">#007AFF</color>
+    <color name="accent_green">#34C759</color>
+    <color name="accent_orange">#FF9500</color>
+    <color name="accent_red">#FF3B30</color>
+    <color name="accent_purple">#AF52DE</color>
+
+    <!-- Badge -->
+    <color name="badge_bg">#1A202C</color>
+    <color name="badge_text">#A0AEC0</color>
+    <color name="light_blue">#60A5FA</color>
+
+    <!-- Stat Card Backgrounds -->
+    <color name="stat_blue_bg">#0D1B2E</color>
+    <color name="stat_green_bg">#0D2818</color>
+    <color name="stat_orange_bg">#2A1A0D</color>
+    <color name="stat_purple_bg">#1A0D2A</color>
+
+    <!-- Nav Colors -->
+    <color name="nav_active">#007AFF</color>
+    <color name="nav_inactive">#4A5568</color>
 </resources>

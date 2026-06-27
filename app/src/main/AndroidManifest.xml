@@ -20,6 +20,30 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <activity
+            android:name=".AdminDashboardActivity"
+            android:exported="false" />
+        <activity
+            android:name=".ManageMembersActivity"
+            android:exported="false" />
+        <activity
+            android:name=".ManageTrainersActivity"
+            android:exported="false" />
+        <activity
+            android:name=".ManagePackagesActivity"
+            android:exported="false" />
+        <activity
+            android:name=".ManagePaymentsActivity"
+            android:exported="false" />
+        <activity
+            android:name=".ManageAttendanceActivity"
+            android:exported="false" />
+        <activity
+            android:name=".SendNotificationsActivity"
+            android:exported="false" />
+        <activity
+            android:name=".GenerateReportsActivity"
+            android:exported="false" />
     </application>
 
 </manifest>

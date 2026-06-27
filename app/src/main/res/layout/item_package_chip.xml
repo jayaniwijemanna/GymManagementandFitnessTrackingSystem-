@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="56dp"
+    android:background="@drawable/bg_input_default"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingHorizontal="16dp"
+    android:layout_marginBottom="8dp"
+    android:clickable="true"
+    android:focusable="true">
+
+    <!-- Package name -->
+    <TextView
+        android:id="@+id/tv_chip_name"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:text="Package Name"
+        android:textColor="@color/text_white"
+        android:textSize="14sp"
+        android:textStyle="bold"/>
+
+    <!-- Price badge -->
+    <TextView
+        android:id="@+id/tv_chip_price"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="12dp"
+        android:text="$0/mo"
+        android:textColor="@color/accent_green"
+        android:textSize="12sp"
+        android:textStyle="bold"/>
+
+    <!-- Checkmark (only visible when selected) -->
+    <ImageView
+        android:id="@+id/check_chip"
+        android:layout_width="20dp"
+        android:layout_height="20dp"
+        android:src="@drawable/ic_check"
+        android:tint="@color/primary"
+        android:visibility="gone"
+        android:contentDescription="Selected"/>
+
+</LinearLayout>
