@@ -44,6 +44,7 @@ public class MainActivity extends AppCompatActivity {
         btnTogglePassword = findViewById(R.id.btn_toggle_password);
         btnSignIn = findViewById(R.id.btn_sign_in);
         tvForgotPassword = findViewById(R.id.tv_forgot_password);
+        TextView tvSignUp = findViewById(R.id.tv_sign_up);
 
         // Password Visibility Toggle
         btnTogglePassword.setOnClickListener(v -> togglePasswordVisibility());
@@ -54,6 +55,12 @@ public class MainActivity extends AppCompatActivity {
         // Forgot Password Action
         tvForgotPassword.setOnClickListener(v -> {
             Toast.makeText(MainActivity.this, "Password recovery feature coming soon.", Toast.LENGTH_SHORT).show();
+        });
+
+        // Sign Up Link Action
+        tvSignUp.setOnClickListener(v -> {
+            android.content.Intent intent = new android.content.Intent(MainActivity.this, CreateProfileActivity.class);
+            startActivity(intent);
         });
     }
 
@@ -77,17 +84,17 @@ public class MainActivity extends AppCompatActivity {
         String email = etEmail.getText().toString().trim();
         String password = etPassword.getText().toString().trim();
 
-        if (email.equals("admin")) {
+        if (TextUtils.isEmpty(email)) {
+            etEmail.setError("Email is required");
+            etEmail.requestFocus();
+            return;
+        }
+
+        if (email.equalsIgnoreCase("admin")) {
             Toast.makeText(this, "Connecting to Titan Shield secure database...", Toast.LENGTH_SHORT).show();
             android.content.Intent intent = new android.content.Intent(MainActivity.this, AdminDashboardActivity.class);
             startActivity(intent);
             finish();
-            return;
-        }
-
-        if (TextUtils.isEmpty(email)) {
-            etEmail.setError("Email is required");
-            etEmail.requestFocus();
             return;
         }
 
@@ -109,11 +116,29 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
-        // Simulate successful login and navigate to AdminDashboardActivity
-        Toast.makeText(this, "Connecting to Titan Shield secure database...", Toast.LENGTH_SHORT).show();
-        
-        android.content.Intent intent = new android.content.Intent(MainActivity.this, AdminDashboardActivity.class);
-        startActivity(intent);
-        finish();
+        // Verify if it is a registered member
+        Member foundMember = null;
+        for (Member m : DataStore.getInstance().members) {
+            if (m.email.equalsIgnoreCase(email)) {
+                foundMember = m;
+                break;
+            }
+        }
+
+        if (foundMember != null) {
+            if (foundMember.password.equals(password)) {
+                Toast.makeText(this, "Connecting to Titan Shield secure database...", Toast.LENGTH_SHORT).show();
+                android.content.Intent intent = new android.content.Intent(MainActivity.this, MemberDashboardActivity.class);
+                intent.putExtra("MEMBER_EMAIL", foundMember.email);
+                startActivity(intent);
+                finish();
+            } else {
+                etPassword.setError("Incorrect password");
+                etPassword.requestFocus();
+            }
+            return;
+        }
+
+        Toast.makeText(this, "No account found. Please sign up first.", Toast.LENGTH_LONG).show();
     }
 }

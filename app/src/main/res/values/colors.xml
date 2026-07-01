@@ -42,6 +42,7 @@
     <color name="stat_green_bg">#0D2818</color>
     <color name="stat_orange_bg">#2A1A0D</color>
     <color name="stat_purple_bg">#1A0D2A</color>
+    <color name="stat_red_bg">#2D1010</color>
 
     <!-- Nav Colors -->
     <color name="nav_active">#007AFF</color>

@@ -6,7 +6,7 @@
     android:layout_height="match_parent"
     android:fillViewport="true"
     android:background="@color/bg_main"
-    tools:context=".MainActivity">
+    tools:context=".CreateProfileActivity">
 
     <androidx.constraintlayout.widget.ConstraintLayout
         android:id="@+id/main"
@@ -19,7 +19,7 @@
             android:id="@+id/logo_container"
             android:layout_width="56dp"
             android:layout_height="56dp"
-            android:layout_marginTop="32dp"
+            android:layout_marginTop="16dp"
             android:background="@drawable/bg_logo"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
@@ -40,7 +40,7 @@
             android:id="@+id/title_titan_gym"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
+            android:layout_marginTop="12dp"
             android:fontFamily="sans-serif-black"
             android:letterSpacing="0.05"
             android:text="TITAN GYM"
@@ -57,7 +57,7 @@
             android:id="@+id/badge_secure"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
+            android:layout_marginTop="8dp"
             android:background="@drawable/bg_badge"
             android:gravity="center"
             android:orientation="horizontal"
@@ -66,7 +66,7 @@
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@id/title_titan_gym"
-            app:layout_constraintBottom_toTopOf="@id/login_card">
+            app:layout_constraintBottom_toTopOf="@id/register_card">
 
             <ImageView
                 android:layout_width="12dp"
@@ -81,7 +81,7 @@
                 android:layout_marginStart="6dp"
                 android:fontFamily="sans-serif-medium"
                 android:letterSpacing="0.1"
-                android:text="SECURE ACCESS PORTAL"
+                android:text="CREATE PROFILE"
                 android:textColor="@color/badge_text"
                 android:textSize="10sp"
                 android:textStyle="bold" />
@@ -89,10 +89,10 @@
 
         <!-- Card Container -->
         <LinearLayout
-            android:id="@+id/login_card"
+            android:id="@+id/register_card"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="28dp"
+            android:layout_marginTop="20dp"
             android:background="@drawable/bg_card"
             android:orientation="vertical"
             android:padding="24dp"
@@ -101,43 +101,41 @@
             app:layout_constraintTop_toBottomOf="@id/badge_secure"
             app:layout_constraintBottom_toTopOf="@id/footer_copyright">
 
-            <!-- Card Header: Welcome back -->
+            <!-- Card Header -->
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:fontFamily="sans-serif-bold"
-                android:text="Welcome back"
+                android:text="Join the Shield"
                 android:textColor="@color/white"
                 android:textSize="20sp"
                 android:textStyle="bold" />
 
-            <!-- Card Subtitle -->
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
+                android:layout_marginTop="4dp"
                 android:fontFamily="sans-serif"
-                android:text="Enter your credentials to access the command center."
+                android:text="Enter details below to generate your security OTP."
                 android:textColor="@color/text_gray"
                 android:textSize="13sp" />
 
-            <!-- Label: Email -->
+            <!-- Input: Full Name -->
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="28dp"
+                android:layout_marginTop="20dp"
                 android:fontFamily="sans-serif-black"
                 android:letterSpacing="0.08"
-                android:text="EMAIL ADDRESS"
+                android:text="FULL NAME"
                 android:textColor="@color/text_gray"
                 android:textSize="10sp"
                 android:textStyle="bold" />
 
-            <!-- Input: Email Box -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="48dp"
-                android:layout_marginTop="8dp"
+                android:layout_marginTop="6dp"
                 android:background="@drawable/bg_input_selector"
                 android:gravity="center_vertical"
                 android:orientation="horizontal"
@@ -146,7 +144,48 @@
                 <ImageView
                     android:layout_width="18dp"
                     android:layout_height="18dp"
-                    android:contentDescription="Email symbol"
+                    android:src="@drawable/ic_person"
+                    app:tint="@color/text_hint" />
+
+                <EditText
+                    android:id="@+id/et_name"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_marginStart="10dp"
+                    android:layout_weight="1"
+                    android:background="@null"
+                    android:hint="John Doe"
+                    android:inputType="textPersonName"
+                    android:textColor="@color/white"
+                    android:textColorHint="@color/text_hint"
+                    android:textSize="14sp"
+                    android:importantForAutofill="no" />
+            </LinearLayout>
+
+            <!-- Input: Email -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:fontFamily="sans-serif-black"
+                android:letterSpacing="0.08"
+                android:text="EMAIL ADDRESS"
+                android:textColor="@color/text_gray"
+                android:textSize="10sp"
+                android:textStyle="bold" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:layout_marginTop="6dp"
+                android:background="@drawable/bg_input_selector"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingHorizontal="14dp">
+
+                <ImageView
+                    android:layout_width="18dp"
+                    android:layout_height="18dp"
                     android:src="@drawable/ic_email"
                     app:tint="@color/text_hint" />
 
@@ -157,8 +196,7 @@
                     android:layout_marginStart="10dp"
                     android:layout_weight="1"
                     android:background="@null"
-                    android:fontFamily="sans-serif"
-                    android:hint="email@example.com"
+                    android:hint="john@example.com"
                     android:inputType="textEmailAddress"
                     android:textColor="@color/white"
                     android:textColorHint="@color/text_hint"
@@ -166,46 +204,22 @@
                     android:importantForAutofill="no" />
             </LinearLayout>
 
-            <!-- Label & Link: Password -->
-            <RelativeLayout
-                android:layout_width="match_parent"
+            <!-- Input: Phone -->
+            <TextView
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="20dp">
+                android:layout_marginTop="16dp"
+                android:fontFamily="sans-serif-black"
+                android:letterSpacing="0.08"
+                android:text="PHONE NUMBER"
+                android:textColor="@color/text_gray"
+                android:textSize="10sp"
+                android:textStyle="bold" />
 
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_alignParentStart="true"
-                    android:layout_centerVertical="true"
-                    android:fontFamily="sans-serif-black"
-                    android:letterSpacing="0.08"
-                    android:text="PASSWORD"
-                    android:textColor="@color/text_gray"
-                    android:textSize="10sp"
-                    android:textStyle="bold" />
-
-                <TextView
-                    android:id="@+id/tv_forgot_password"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_alignParentEnd="true"
-                    android:layout_centerVertical="true"
-                    android:background="?android:attr/selectableItemBackground"
-                    android:clickable="true"
-                    android:focusable="true"
-                    android:fontFamily="sans-serif-bold"
-                    android:letterSpacing="0.05"
-                    android:text="Forgot Password?"
-                    android:textColor="@color/text_gray"
-                    android:textSize="10sp"
-                    android:textStyle="bold" />
-            </RelativeLayout>
-
-            <!-- Input: Password Box -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="48dp"
-                android:layout_marginTop="8dp"
+                android:layout_marginTop="6dp"
                 android:background="@drawable/bg_input_selector"
                 android:gravity="center_vertical"
                 android:orientation="horizontal"
@@ -214,7 +228,48 @@
                 <ImageView
                     android:layout_width="18dp"
                     android:layout_height="18dp"
-                    android:contentDescription="Password lock"
+                    android:src="@drawable/ic_person"
+                    app:tint="@color/text_hint" />
+
+                <EditText
+                    android:id="@+id/et_phone"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_marginStart="10dp"
+                    android:layout_weight="1"
+                    android:background="@null"
+                    android:hint="555-0199"
+                    android:inputType="phone"
+                    android:textColor="@color/white"
+                    android:textColorHint="@color/text_hint"
+                    android:textSize="14sp"
+                    android:importantForAutofill="no" />
+            </LinearLayout>
+
+            <!-- Input: Password -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:fontFamily="sans-serif-black"
+                android:letterSpacing="0.08"
+                android:text="PASSWORD"
+                android:textColor="@color/text_gray"
+                android:textSize="10sp"
+                android:textStyle="bold" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:layout_marginTop="6dp"
+                android:background="@drawable/bg_input_selector"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingHorizontal="14dp">
+
+                <ImageView
+                    android:layout_width="18dp"
+                    android:layout_height="18dp"
                     android:src="@drawable/ic_lock"
                     app:tint="@color/text_hint" />
 
@@ -225,32 +280,62 @@
                     android:layout_marginStart="10dp"
                     android:layout_weight="1"
                     android:background="@null"
-                    android:fontFamily="sans-serif"
                     android:hint="••••••••"
                     android:inputType="textPassword"
                     android:textColor="@color/white"
                     android:textColorHint="@color/text_hint"
                     android:textSize="14sp"
                     android:importantForAutofill="no" />
-
-                <ImageView
-                    android:id="@+id/btn_toggle_password"
-                    android:layout_width="20dp"
-                    android:layout_height="20dp"
-                    android:background="?android:attr/selectableItemBackgroundBorderless"
-                    android:clickable="true"
-                    android:contentDescription="Toggle password visibility"
-                    android:focusable="true"
-                    android:src="@drawable/ic_eye"
-                    app:tint="@color/text_hint" />
             </LinearLayout>
 
-            <!-- Button: Sign In -->
+            <!-- Input: Confirm Password -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:fontFamily="sans-serif-black"
+                android:letterSpacing="0.08"
+                android:text="CONFIRM PASSWORD"
+                android:textColor="@color/text_gray"
+                android:textSize="10sp"
+                android:textStyle="bold" />
+
             <LinearLayout
-                android:id="@+id/btn_sign_in"
                 android:layout_width="match_parent"
                 android:layout_height="48dp"
-                android:layout_marginTop="28dp"
+                android:layout_marginTop="6dp"
+                android:background="@drawable/bg_input_selector"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingHorizontal="14dp">
+
+                <ImageView
+                    android:layout_width="18dp"
+                    android:layout_height="18dp"
+                    android:src="@drawable/ic_lock"
+                    app:tint="@color/text_hint" />
+
+                <EditText
+                    android:id="@+id/et_confirm_password"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_marginStart="10dp"
+                    android:layout_weight="1"
+                    android:background="@null"
+                    android:hint="••••••••"
+                    android:inputType="textPassword"
+                    android:textColor="@color/white"
+                    android:textColorHint="@color/text_hint"
+                    android:textSize="14sp"
+                    android:importantForAutofill="no" />
+            </LinearLayout>
+
+            <!-- Button: Register -->
+            <LinearLayout
+                android:id="@+id/btn_register"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:layout_marginTop="24dp"
                 android:background="@drawable/bg_button_selector"
                 android:clickable="true"
                 android:focusable="true"
@@ -261,7 +346,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:fontFamily="sans-serif-bold"
-                    android:text="Sign In"
+                    android:text="Verify Email &amp; Sign Up"
                     android:textColor="@color/white"
                     android:textSize="16sp"
                     android:textStyle="bold" />
@@ -275,9 +360,9 @@
                     app:tint="@color/white" />
             </LinearLayout>
 
-            <!-- Sign Up Link -->
+            <!-- Back to Login Link -->
             <TextView
-                android:id="@+id/tv_sign_up"
+                android:id="@+id/tv_back_to_login"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center_horizontal"
@@ -287,41 +372,10 @@
                 android:focusable="true"
                 android:fontFamily="sans-serif-bold"
                 android:letterSpacing="0.05"
-                android:text="Don't have an account? Sign Up"
-                android:textColor="@color/accent_blue"
+                android:text="Already have an account? Sign In"
+                android:textColor="@color/text_gray"
                 android:textSize="13sp"
                 android:textStyle="bold" />
-
-            <!-- Card Footer: Protected by Titan Shield -->
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center_horizontal"
-                android:layout_marginTop="28dp"
-                android:fontFamily="sans-serif-bold"
-                android:letterSpacing="0.08"
-                android:text="PROTECTED BY TITAN SHIELD v4.2"
-                android:textColor="@color/text_gray"
-                android:textSize="9sp"
-                android:textStyle="bold" />
-
-            <!-- Card Footer Logo with subtle glow background -->
-            <FrameLayout
-                android:layout_width="32dp"
-                android:layout_height="32dp"
-                android:layout_gravity="center_horizontal"
-                android:layout_marginTop="8dp"
-                android:background="@drawable/bg_input_default">
-
-                <ImageView
-                    android:layout_width="16dp"
-                    android:layout_height="16dp"
-                    android:layout_gravity="center"
-                    android:contentDescription="Titan Shield Small Logo"
-                    android:src="@drawable/ic_shield"
-                    app:tint="@color/accent_blue" />
-            </FrameLayout>
-
         </LinearLayout>
 
         <!-- Copyright Footer -->
@@ -329,7 +383,7 @@
             android:id="@+id/footer_copyright"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
+            android:layout_marginTop="20dp"
             android:layout_marginBottom="16dp"
             android:fontFamily="sans-serif-bold"
             android:gravity="center"
@@ -341,7 +395,7 @@
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/login_card" />
+            app:layout_constraintTop_toBottomOf="@id/register_card" />
 
     </androidx.constraintlayout.widget.ConstraintLayout>
 

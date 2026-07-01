@@ -44,6 +44,15 @@
         <activity
             android:name=".GenerateReportsActivity"
             android:exported="false" />
+        <activity
+            android:name=".CreateProfileActivity"
+            android:exported="false" />
+        <activity
+            android:name=".VerifyOtpActivity"
+            android:exported="false" />
+        <activity
+            android:name=".MemberDashboardActivity"
+            android:exported="false" />
     </application>
 
 </manifest>
