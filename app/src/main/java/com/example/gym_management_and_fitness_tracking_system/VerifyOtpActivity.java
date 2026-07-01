@@ -25,6 +25,7 @@ public class VerifyOtpActivity extends AppCompatActivity {
     private String regEmail;
     private String regPhone;
     private String regPassword;
+    private String regRole; // "member" or "trainer"
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -41,10 +42,12 @@ public class VerifyOtpActivity extends AppCompatActivity {
         // Retrieve registration data from intent
         Intent incoming = getIntent();
         if (incoming != null) {
-            regName = incoming.getStringExtra("REG_NAME");
-            regEmail = incoming.getStringExtra("REG_EMAIL");
-            regPhone = incoming.getStringExtra("REG_PHONE");
+            regName     = incoming.getStringExtra("REG_NAME");
+            regEmail    = incoming.getStringExtra("REG_EMAIL");
+            regPhone    = incoming.getStringExtra("REG_PHONE");
             regPassword = incoming.getStringExtra("REG_PASSWORD");
+            regRole     = incoming.getStringExtra("REG_ROLE");
+            if (regRole == null) regRole = "member"; // safe default
         }
 
         // Initialize UI Elements
@@ -74,15 +77,29 @@ public class VerifyOtpActivity extends AppCompatActivity {
         }
 
         if (enteredCode.equals("1234")) {
-            // Save the member
-            Member newMember = new Member(regName, regEmail, regPhone, "None", regPassword);
-            DataStore.getInstance().members.add(newMember);
 
-            Toast.makeText(this, "Profile verified! Welcome to Titan Gym.", Toast.LENGTH_LONG).show();
+            Intent intent;
 
-            // Navigate to member dashboard (clear back stack)
-            Intent intent = new Intent(VerifyOtpActivity.this, MemberDashboardActivity.class);
-            intent.putExtra("MEMBER_EMAIL", regEmail);
+            if ("trainer".equals(regRole)) {
+                // Create a new Trainer account
+                Trainer newTrainer = new Trainer(regName, "General Fitness", regPhone, regEmail, regPassword);
+                DataStore.getInstance().trainers.add(newTrainer);
+
+                Toast.makeText(this, "Trainer account created! Welcome, " + regName + ".", Toast.LENGTH_LONG).show();
+
+                intent = new Intent(VerifyOtpActivity.this, TrainerDashboardActivity.class);
+                intent.putExtra("TRAINER_EMAIL", regEmail);
+            } else {
+                // Create a new Member account
+                Member newMember = new Member(regName, regEmail, regPhone, "None", regPassword);
+                DataStore.getInstance().members.add(newMember);
+
+                Toast.makeText(this, "Profile verified! Welcome to Titan Gym.", Toast.LENGTH_LONG).show();
+
+                intent = new Intent(VerifyOtpActivity.this, MemberDashboardActivity.class);
+                intent.putExtra("MEMBER_EMAIL", regEmail);
+            }
+
             intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
             startActivity(intent);
             finish();

@@ -53,6 +53,9 @@
         <activity
             android:name=".MemberDashboardActivity"
             android:exported="false" />
+        <activity
+            android:name=".TrainerDashboardActivity"
+            android:exported="false" />
     </application>
 
 </manifest>

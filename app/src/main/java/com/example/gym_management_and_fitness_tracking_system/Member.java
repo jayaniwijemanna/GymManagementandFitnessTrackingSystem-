@@ -13,6 +13,9 @@ public class Member {
     public double weight = 70.0; // kg
     public String bookedTrainer = "None";
     public String bookedTime = "None";
+    public String bookingStatus = "None"; // "None", "Pending", "Accepted", "Rejected"
+    public String workoutPlan = "";
+    public String dietPlan = "";
     public int waterIntake = 0;
     public List<String> weightHistory = new ArrayList<>();
     public List<String> notifications = new ArrayList<>();

@@ -98,6 +98,28 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
+        if (email.equalsIgnoreCase("member")) {
+            Toast.makeText(this, "Connecting to Titan Shield secure database...", Toast.LENGTH_SHORT).show();
+            android.content.Intent intent = new android.content.Intent(MainActivity.this, MemberDashboardActivity.class);
+            if (!DataStore.getInstance().members.isEmpty()) {
+                intent.putExtra("MEMBER_EMAIL", DataStore.getInstance().members.get(0).email);
+            }
+            startActivity(intent);
+            finish();
+            return;
+        }
+
+        if (email.equalsIgnoreCase("trainer")) {
+            Toast.makeText(this, "Connecting to Titan Shield secure database...", Toast.LENGTH_SHORT).show();
+            android.content.Intent intent = new android.content.Intent(MainActivity.this, TrainerDashboardActivity.class);
+            if (!DataStore.getInstance().trainers.isEmpty()) {
+                intent.putExtra("TRAINER_EMAIL", DataStore.getInstance().trainers.get(0).email);
+            }
+            startActivity(intent);
+            finish();
+            return;
+        }
+
         if (!Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
             etEmail.setError("Enter a valid email address");
             etEmail.requestFocus();
@@ -130,6 +152,29 @@ public class MainActivity extends AppCompatActivity {
                 Toast.makeText(this, "Connecting to Titan Shield secure database...", Toast.LENGTH_SHORT).show();
                 android.content.Intent intent = new android.content.Intent(MainActivity.this, MemberDashboardActivity.class);
                 intent.putExtra("MEMBER_EMAIL", foundMember.email);
+                startActivity(intent);
+                finish();
+            } else {
+                etPassword.setError("Incorrect password");
+                etPassword.requestFocus();
+            }
+            return;
+        }
+
+        // Verify if it is a registered trainer
+        Trainer foundTrainer = null;
+        for (Trainer t : DataStore.getInstance().trainers) {
+            if (t.email != null && t.email.equalsIgnoreCase(email)) {
+                foundTrainer = t;
+                break;
+            }
+        }
+
+        if (foundTrainer != null) {
+            if (foundTrainer.password != null && foundTrainer.password.equals(password)) {
+                Toast.makeText(this, "Connecting to Titan Shield secure database...", Toast.LENGTH_SHORT).show();
+                android.content.Intent intent = new android.content.Intent(MainActivity.this, TrainerDashboardActivity.class);
+                intent.putExtra("TRAINER_EMAIL", foundTrainer.email);
                 startActivity(intent);
                 finish();
             } else {

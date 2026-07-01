@@ -59,8 +59,8 @@ public class MemberDashboardActivity extends AppCompatActivity {
     // Home Tab elements
     private TextView tvHomePlanName, tvHomePlanStatus, tvHomePlanDesc;
     private TextView tvHomeCheckinStatus, tvHomeCheckinBadge;
-    private TextView tvHomeBookingInfo;
-    private LinearLayout btnHomeBuyPlan, btnHomeCheckin, btnHomeBookTrainer;
+    private TextView tvHomeBookingInfo, tvHomeWorkoutPlan, tvHomeDietPlan, tvHomeChatTrainerName;
+    private LinearLayout btnHomeBuyPlan, btnHomeCheckin, btnHomeBookTrainer, btnHomeChat;
 
     // Programs Tab elements
     private LinearLayout layoutPackagesList, layoutTrainersList;
@@ -160,9 +160,13 @@ public class MemberDashboardActivity extends AppCompatActivity {
         tvHomeCheckinStatus = findViewById(R.id.tv_home_checkin_status);
         tvHomeCheckinBadge = findViewById(R.id.tv_home_checkin_badge);
         tvHomeBookingInfo = findViewById(R.id.tv_home_booking_info);
+        tvHomeWorkoutPlan = findViewById(R.id.tv_home_workout_plan);
+        tvHomeDietPlan = findViewById(R.id.tv_home_diet_plan);
+        tvHomeChatTrainerName = findViewById(R.id.tv_home_chat_trainer_name);
         btnHomeBuyPlan = findViewById(R.id.btn_home_buy_plan);
         btnHomeCheckin = findViewById(R.id.btn_home_checkin);
         btnHomeBookTrainer = findViewById(R.id.btn_home_book_trainer);
+        btnHomeChat = findViewById(R.id.btn_home_chat);
 
         // Programs Tab details
         layoutPackagesList = findViewById(R.id.layout_packages_list);
@@ -345,15 +349,34 @@ public class MemberDashboardActivity extends AppCompatActivity {
         if (currentMember.bookedTrainer.equals("None")) {
             tvHomeBookingInfo.setText("No active personal trainer booking.");
             btnHomeBookTrainer.setVisibility(View.VISIBLE);
+            tvHomeChatTrainerName.setText("No active personal trainer");
+            btnHomeChat.setEnabled(false);
+            btnHomeChat.setAlpha(0.5f);
         } else {
-            tvHomeBookingInfo.setText("Booked: " + currentMember.bookedTrainer + "\nTime: " + currentMember.bookedTime);
+            tvHomeBookingInfo.setText("Booked: " + currentMember.bookedTrainer + " (" + currentMember.bookingStatus + ")\nTime: " + currentMember.bookedTime);
             btnHomeBookTrainer.setVisibility(View.GONE);
+            tvHomeChatTrainerName.setText("Chat with " + currentMember.bookedTrainer);
+            btnHomeChat.setEnabled(true);
+            btnHomeChat.setAlpha(1.0f);
+        }
+
+        // Workout and Diet Plans binding
+        if (currentMember.workoutPlan == null || currentMember.workoutPlan.trim().isEmpty()) {
+            tvHomeWorkoutPlan.setText("No workout plan assigned yet. Ask your trainer!");
+        } else {
+            tvHomeWorkoutPlan.setText(currentMember.workoutPlan);
+        }
+
+        if (currentMember.dietPlan == null || currentMember.dietPlan.trim().isEmpty()) {
+            tvHomeDietPlan.setText("No diet plan assigned yet. Ask your trainer!");
+        } else {
+            tvHomeDietPlan.setText(currentMember.dietPlan);
         }
 
         btnHomeBuyPlan.setOnClickListener(v -> selectTab(1));
         btnHomeBookTrainer.setOnClickListener(v -> selectTab(1));
-
         btnHomeCheckin.setOnClickListener(v -> triggerCheckinFlow());
+        btnHomeChat.setOnClickListener(v -> openChatDialog());
     }
 
     private void triggerCheckinFlow() {
@@ -580,6 +603,7 @@ public class MemberDashboardActivity extends AppCompatActivity {
                     progress.dismiss();
                     currentMember.bookedTrainer = trainer.name;
                     currentMember.bookedTime = selectedDate + " at " + selectedTime;
+                    currentMember.bookingStatus = "Pending";
                     currentMember.notifications.add("Booked personal training slot with " + trainer.name);
                     updateNotificationBadge();
                     refreshHomeTab();
@@ -757,6 +781,16 @@ public class MemberDashboardActivity extends AppCompatActivity {
                 currentMember.notifications.add("Submitted " + selectedRating + "-star rating feedback for " + item);
                 updateNotificationBadge();
 
+                // Link feedback to trainer
+                if (!item.equals("General Gym Experience")) {
+                    for (Trainer t : DataStore.getInstance().trainers) {
+                        if (item.startsWith(t.name)) {
+                            t.addFeedback(selectedRating + " ★ - \"" + feedbackMsg + "\" (by " + currentMember.name + ")");
+                            break;
+                        }
+                    }
+                }
+
                 Toast.makeText(this, "Feedback submitted successfully. Thank you!", Toast.LENGTH_LONG).show();
                 
                 // Clear fields
@@ -776,5 +810,48 @@ public class MemberDashboardActivity extends AppCompatActivity {
                 starViews[i].setColorFilter(Color.parseColor("#4A5568")); // inactive tint
             }
         }
+    }
+
+    private void openChatDialog() {
+        if (currentMember.bookedTrainer.equals("None")) return;
+        
+        AlertDialog.Builder builder = new AlertDialog.Builder(this, AlertDialog.THEME_HOLO_DARK);
+        View dialogView = getLayoutInflater().inflate(R.layout.activity_verify_otp, null);
+        
+        TextView title = dialogView.findViewById(R.id.title_titan_gym);
+        title.setText("CHAT PORTAL");
+        
+        TextView instructions = dialogView.findViewById(R.id.tv_otp_instructions);
+        instructions.setText("Secure channel with " + currentMember.bookedTrainer);
+        
+        EditText etMsg = dialogView.findViewById(R.id.et_otp);
+        etMsg.setHint("Type your message...");
+        etMsg.setInputType(android.text.InputType.TYPE_CLASS_TEXT);
+        
+        TextView tvCancel = dialogView.findViewById(R.id.tv_cancel);
+        tvCancel.setText("Close Chat");
+        
+        LinearLayout btnSend = (LinearLayout) dialogView.findViewById(R.id.btn_verify);
+        TextView btnSendText = (TextView) btnSend.getChildAt(0);
+        btnSendText.setText("Send Message");
+        
+        AlertDialog dialog = builder.setView(dialogView).create();
+        
+        btnSend.setOnClickListener(v -> {
+            String msg = etMsg.getText().toString().trim();
+            if (msg.isEmpty()) return;
+            Toast.makeText(this, "Message sent to " + currentMember.bookedTrainer, Toast.LENGTH_SHORT).show();
+            etMsg.setText("");
+            
+            // Auto response after 1.5 seconds
+            new Handler().postDelayed(() -> {
+                if (!isFinishing()) {
+                    Toast.makeText(this, currentMember.bookedTrainer + ": Got your message! Let's discuss it in our next session.", Toast.LENGTH_LONG).show();
+                }
+            }, 1500);
+        });
+        
+        tvCancel.setOnClickListener(v -> dialog.dismiss());
+        dialog.show();
     }
 }

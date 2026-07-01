@@ -4,11 +4,33 @@ public class Trainer {
     public String name;
     public String specialization;
     public String phone;
+    public String email;
+    public String password;
+    public java.util.List<String> feedback = new java.util.ArrayList<>();
+    public String rating = "5.0";
 
     public Trainer(String name, String specialization, String phone) {
         this.name = name;
         this.specialization = specialization;
         this.phone = phone;
+        // Generate a fallback/default email and password
+        this.email = name.toLowerCase().replace(" ", "") + "@gmail.com";
+        this.password = "password";
+    }
+
+    public Trainer(String name, String specialization, String phone, String email, String password) {
+        this.name = name;
+        this.specialization = specialization;
+        this.phone = phone;
+        this.email = email;
+        this.password = password;
+    }
+
+    public void addFeedback(String review) {
+        if (feedback == null) {
+            feedback = new java.util.ArrayList<>();
+        }
+        feedback.add(review);
     }
 
     public String getInitials() {

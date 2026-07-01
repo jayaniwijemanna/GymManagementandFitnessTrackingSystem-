@@ -1,10 +1,12 @@
 package com.example.gym_management_and_fitness_tracking_system;
 
 import android.content.Intent;
+import android.graphics.Color;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.util.Patterns;
 import android.widget.EditText;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -17,13 +19,19 @@ import androidx.core.view.WindowInsetsCompat;
 
 public class CreateProfileActivity extends AppCompatActivity {
 
-    private EditText etName;
-    private EditText etEmail;
-    private EditText etPhone;
-    private EditText etPassword;
-    private EditText etConfirmPassword;
-    private LinearLayout btnRegister;
-    private TextView tvBackToLogin;
+    private EditText etName, etEmail, etPhone, etPassword, etConfirmPassword;
+    private LinearLayout btnRegister, roleMember, roleTrainer;
+    private ImageView iconRoleMember, iconRoleTrainer;
+    private TextView tvRoleMember, tvRoleTrainer, tvBackToLogin;
+
+    // "member" or "trainer"
+    private String selectedRole = "member";
+
+    // Active pill colours
+    private static final String COLOR_ACTIVE_BG  = "#1A6EFF"; // accent blue fill for member
+    private static final String COLOR_ACTIVE_TEXT = "#FFFFFF";
+    private static final String COLOR_TRAINER_BG  = "#34C759"; // green for trainer
+    private static final String COLOR_INACTIVE_TEXT = "#6B7280";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -37,87 +45,113 @@ public class CreateProfileActivity extends AppCompatActivity {
             return insets;
         });
 
-        // Initialize UI Elements
-        etName = findViewById(R.id.et_name);
-        etEmail = findViewById(R.id.et_email);
-        etPhone = findViewById(R.id.et_phone);
-        etPassword = findViewById(R.id.et_password);
+        // Bind views
+        etName            = findViewById(R.id.et_name);
+        etEmail           = findViewById(R.id.et_email);
+        etPhone           = findViewById(R.id.et_phone);
+        etPassword        = findViewById(R.id.et_password);
         etConfirmPassword = findViewById(R.id.et_confirm_password);
-        btnRegister = findViewById(R.id.btn_register);
-        tvBackToLogin = findViewById(R.id.tv_back_to_login);
+        btnRegister       = findViewById(R.id.btn_register);
+        tvBackToLogin     = findViewById(R.id.tv_back_to_login);
 
-        // Register Action
+        roleMember      = findViewById(R.id.role_member);
+        roleTrainer     = findViewById(R.id.role_trainer);
+        iconRoleMember  = findViewById(R.id.icon_role_member);
+        iconRoleTrainer = findViewById(R.id.icon_role_trainer);
+        tvRoleMember    = findViewById(R.id.tv_role_member);
+        tvRoleTrainer   = findViewById(R.id.tv_role_trainer);
+
+        // Default selection: Member
+        setRoleSelected("member");
+
+        roleMember.setOnClickListener(v -> setRoleSelected("member"));
+        roleTrainer.setOnClickListener(v -> setRoleSelected("trainer"));
+
         btnRegister.setOnClickListener(v -> handleRegistration());
-
-        // Back to Login
         tvBackToLogin.setOnClickListener(v -> finish());
     }
 
+    /** Highlights the selected pill and dims the other */
+    private void setRoleSelected(String role) {
+        selectedRole = role;
+
+        if ("member".equals(role)) {
+            // Active: Member pill
+            roleMember.setBackgroundColor(Color.parseColor(COLOR_ACTIVE_BG));
+            tvRoleMember.setTextColor(Color.parseColor(COLOR_ACTIVE_TEXT));
+            iconRoleMember.setColorFilter(Color.parseColor(COLOR_ACTIVE_TEXT));
+
+            // Inactive: Trainer pill
+            roleTrainer.setBackgroundColor(Color.TRANSPARENT);
+            tvRoleTrainer.setTextColor(Color.parseColor(COLOR_INACTIVE_TEXT));
+            iconRoleTrainer.setColorFilter(Color.parseColor(COLOR_INACTIVE_TEXT));
+
+        } else {
+            // Active: Trainer pill
+            roleTrainer.setBackgroundColor(Color.parseColor(COLOR_TRAINER_BG));
+            tvRoleTrainer.setTextColor(Color.parseColor(COLOR_ACTIVE_TEXT));
+            iconRoleTrainer.setColorFilter(Color.parseColor(COLOR_ACTIVE_TEXT));
+
+            // Inactive: Member pill
+            roleMember.setBackgroundColor(Color.TRANSPARENT);
+            tvRoleMember.setTextColor(Color.parseColor(COLOR_INACTIVE_TEXT));
+            iconRoleMember.setColorFilter(Color.parseColor(COLOR_INACTIVE_TEXT));
+        }
+    }
+
     private void handleRegistration() {
-        String name = etName.getText().toString().trim();
-        String email = etEmail.getText().toString().trim();
-        String phone = etPhone.getText().toString().trim();
-        String password = etPassword.getText().toString().trim();
+        String name            = etName.getText().toString().trim();
+        String email           = etEmail.getText().toString().trim();
+        String phone           = etPhone.getText().toString().trim();
+        String password        = etPassword.getText().toString().trim();
         String confirmPassword = etConfirmPassword.getText().toString().trim();
 
+        // ── Validation ──────────────────────────────────────────────────────
         if (TextUtils.isEmpty(name)) {
-            etName.setError("Name is required");
-            etName.requestFocus();
-            return;
+            etName.setError("Name is required"); etName.requestFocus(); return;
         }
-
         if (TextUtils.isEmpty(email)) {
-            etEmail.setError("Email is required");
-            etEmail.requestFocus();
-            return;
+            etEmail.setError("Email is required"); etEmail.requestFocus(); return;
         }
-
         if (!Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
-            etEmail.setError("Enter a valid email address");
-            etEmail.requestFocus();
-            return;
+            etEmail.setError("Enter a valid email address"); etEmail.requestFocus(); return;
         }
 
-        // Check if email is already taken
+        // Duplicate email check across both members AND trainers
         for (Member m : DataStore.getInstance().members) {
             if (m.email.equalsIgnoreCase(email)) {
-                etEmail.setError("Email is already registered");
-                etEmail.requestFocus();
-                return;
+                etEmail.setError("Email already registered as a member");
+                etEmail.requestFocus(); return;
+            }
+        }
+        for (Trainer t : DataStore.getInstance().trainers) {
+            if (t.email != null && t.email.equalsIgnoreCase(email)) {
+                etEmail.setError("Email already registered as a trainer");
+                etEmail.requestFocus(); return;
             }
         }
 
         if (TextUtils.isEmpty(phone)) {
-            etPhone.setError("Phone is required");
-            etPhone.requestFocus();
-            return;
+            etPhone.setError("Phone is required"); etPhone.requestFocus(); return;
         }
-
         if (TextUtils.isEmpty(password)) {
-            etPassword.setError("Password is required");
-            etPassword.requestFocus();
-            return;
+            etPassword.setError("Password is required"); etPassword.requestFocus(); return;
         }
-
         if (password.length() < 6) {
-            etPassword.setError("Password must be at least 6 characters");
-            etPassword.requestFocus();
-            return;
+            etPassword.setError("Password must be at least 6 characters"); etPassword.requestFocus(); return;
         }
-
         if (!password.equals(confirmPassword)) {
-            etConfirmPassword.setError("Passwords do not match");
-            etConfirmPassword.requestFocus();
-            return;
+            etConfirmPassword.setError("Passwords do not match"); etConfirmPassword.requestFocus(); return;
         }
 
-        // Forwards to OTP verification
-        Toast.makeText(this, "Generating secure email OTP...", Toast.LENGTH_SHORT).show();
-        Intent intent = new Intent(CreateProfileActivity.this, VerifyOtpActivity.class);
-        intent.putExtra("REG_NAME", name);
-        intent.putExtra("REG_EMAIL", email);
-        intent.putExtra("REG_PHONE", phone);
+        // ── Forward to OTP verification ─────────────────────────────────────
+        Toast.makeText(this, "Generating secure OTP for " + selectedRole + " account...", Toast.LENGTH_SHORT).show();
+        Intent intent = new Intent(this, VerifyOtpActivity.class);
+        intent.putExtra("REG_NAME",     name);
+        intent.putExtra("REG_EMAIL",    email);
+        intent.putExtra("REG_PHONE",    phone);
         intent.putExtra("REG_PASSWORD", password);
+        intent.putExtra("REG_ROLE",     selectedRole);   // "member" or "trainer"
         startActivity(intent);
     }
 }
