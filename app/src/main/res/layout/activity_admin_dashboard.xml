@@ -142,11 +142,12 @@
                     </LinearLayout>
 
                     <TextView
+                        android:id="@+id/tv_stat_members"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="12dp"
                         android:fontFamily="sans-serif-bold"
-                        android:text="1,247"
+                        android:text="..."
                         android:textColor="@color/text_white"
                         android:textSize="24sp"
                         android:textStyle="bold" />
@@ -188,11 +189,12 @@
                     </FrameLayout>
 
                     <TextView
+                        android:id="@+id/tv_stat_trainers"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="12dp"
                         android:fontFamily="sans-serif-bold"
-                        android:text="24"
+                        android:text="..."
                         android:textColor="@color/text_white"
                         android:textSize="24sp"
                         android:textStyle="bold" />
@@ -234,11 +236,12 @@
                     </FrameLayout>
 
                     <TextView
+                        android:id="@+id/tv_stat_revenue"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="12dp"
                         android:fontFamily="sans-serif-bold"
-                        android:text="$45,890"
+                        android:text="..."
                         android:textColor="@color/text_white"
                         android:textSize="24sp"
                         android:textStyle="bold" />
@@ -280,11 +283,12 @@
                     </FrameLayout>
 
                     <TextView
+                        android:id="@+id/tv_stat_attendance"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="12dp"
                         android:fontFamily="sans-serif-bold"
-                        android:text="189"
+                        android:text="..."
                         android:textColor="@color/text_white"
                         android:textSize="24sp"
                         android:textStyle="bold" />

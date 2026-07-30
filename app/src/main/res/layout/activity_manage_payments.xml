@@ -23,17 +23,33 @@
             android:tint="@color/text_white"
             android:layout_marginEnd="16dp"
             android:clickable="true"
-            android:focusable="true"/>
+            android:focusable="true"
+            android:contentDescription="Back"/>
 
-        <TextView
+        <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:fontFamily="sans-serif-bold"
-            android:text="Manage Payments"
-            android:textColor="@color/text_white"
-            android:textSize="22sp"
-            android:textStyle="bold" />
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="sans-serif-bold"
+                android:text="Payment &amp; Revenue"
+                android:textColor="@color/text_white"
+                android:textSize="22sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tv_month_subtitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Monthly Revenue Breakdown by Plan"
+                android:textColor="@color/text_gray"
+                android:textSize="13sp"
+                android:layout_marginTop="2dp"/>
+        </LinearLayout>
     </LinearLayout>
 
     <ScrollView
@@ -48,131 +64,89 @@
             android:orientation="vertical"
             android:paddingHorizontal="20dp"
             android:paddingBottom="20dp">
-            
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Pending Verification"
-                android:textColor="@color/text_gray"
-                android:textSize="14sp"
-                android:textStyle="bold"
-                android:layout_marginBottom="12dp"
-                android:layout_marginTop="8dp"/>
 
-            <!-- Pending Payment Item -->
+            <!-- Total Revenue Summary Card -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:background="@drawable/bg_action_card"
-                android:gravity="center_vertical"
-                android:orientation="horizontal"
-                android:padding="16dp"
+                android:background="@drawable/bg_stat_card_orange"
+                android:orientation="vertical"
+                android:padding="20dp"
                 android:layout_marginBottom="24dp">
-                
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:orientation="vertical">
-                    
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="John Doe"
-                        android:textColor="@color/text_white"
-                        android:textSize="16sp"
-                        android:textStyle="bold"/>
-                        
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="Premium Plan - $50.00"
-                        android:textColor="@color/text_gray"
-                        android:textSize="13sp"
-                        android:layout_marginTop="2dp"/>
-                        
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="Ref: TXN-982374"
-                        android:textColor="@color/text_muted"
-                        android:textSize="12sp"
-                        android:layout_marginTop="2dp"/>
-                </LinearLayout>
-                
-                <Button
-                    android:id="@+id/btn_verify_payment"
+
+                <TextView
                     android:layout_width="wrap_content"
-                    android:layout_height="40dp"
-                    android:backgroundTint="@color/accent_green"
-                    android:text="Verify"
-                    android:textColor="@color/white"
-                    android:textSize="12sp"
-                    android:textStyle="bold"/>
+                    android:layout_height="wrap_content"
+                    android:text="ESTIMATED MONTHLY REVENUE"
+                    android:textColor="@color/text_muted"
+                    android:textSize="11sp"
+                    android:letterSpacing="0.06"
+                    android:fontFamily="sans-serif-bold"/>
+
+                <TextView
+                    android:id="@+id/tv_total_monthly_revenue"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="$0.00"
+                    android:textColor="@color/text_white"
+                    android:textSize="32sp"
+                    android:fontFamily="sans-serif-bold"
+                    android:textStyle="bold"
+                    android:layout_marginTop="8dp"/>
+
+                <TextView
+                    android:id="@+id/tv_active_subscriptions_count"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Based on active member subscriptions"
+                    android:textColor="@color/text_gray"
+                    android:textSize="13sp"
+                    android:layout_marginTop="4dp"/>
             </LinearLayout>
-            
+
+            <!-- Revenue Breakdown by Plan Section Header -->
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Recent Transactions"
-                android:textColor="@color/text_gray"
-                android:textSize="14sp"
-                android:textStyle="bold"
+                android:text="REVENUE BREAKDOWN BY PLAN"
+                android:textColor="@color/text_muted"
+                android:textSize="11sp"
+                android:letterSpacing="0.06"
+                android:fontFamily="sans-serif-bold"
                 android:layout_marginBottom="12dp"/>
-                
-            <!-- Completed Payment Item -->
+
+            <!-- Dynamic Plan Breakdown Container -->
             <LinearLayout
+                android:id="@+id/container_plan_breakdown"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:background="@drawable/bg_action_card"
-                android:gravity="center_vertical"
-                android:orientation="horizontal"
-                android:padding="16dp"
-                android:layout_marginBottom="12dp">
-                
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:orientation="vertical">
-                    
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="Sarah Kumar"
-                        android:textColor="@color/text_white"
-                        android:textSize="16sp"
-                        android:textStyle="bold"/>
-                        
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="Standard Plan - $30.00"
-                        android:textColor="@color/text_gray"
-                        android:textSize="13sp"
-                        android:layout_marginTop="2dp"/>
-                        
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="Oct 24, 2023"
-                        android:textColor="@color/accent_green"
-                        android:textSize="12sp"
-                        android:layout_marginTop="2dp"/>
-                </LinearLayout>
-                
-                <Button
-                    android:id="@+id/btn_receipt"
-                    android:layout_width="wrap_content"
-                    android:layout_height="40dp"
-                    android:backgroundTint="@color/bg_card_elevated"
-                    android:text="Receipt"
-                    android:textColor="@color/primary"
-                    android:textSize="12sp"
-                    android:textStyle="bold"/>
+                android:orientation="vertical"
+                android:layout_marginBottom="24dp">
+                <!-- Dynamically populated from Java -->
+            </LinearLayout>
+
+            <!-- Member Subscriptions & Payment Status Section -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="MEMBER SUBSCRIPTION PAYMENTS"
+                android:textColor="@color/text_muted"
+                android:textSize="11sp"
+                android:letterSpacing="0.06"
+                android:fontFamily="sans-serif-bold"
+                android:layout_marginBottom="12dp"/>
+
+            <!-- Dynamic Member Payments Container -->
+            <LinearLayout
+                android:id="@+id/container_member_payments"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+                <!-- Dynamically populated from Java -->
             </LinearLayout>
 
         </LinearLayout>
     </ScrollView>
 
 </LinearLayout>
+
