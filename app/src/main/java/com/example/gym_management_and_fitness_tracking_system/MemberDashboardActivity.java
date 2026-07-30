@@ -1397,13 +1397,43 @@ public class MemberDashboardActivity extends AppCompatActivity {
             row1.addView(tvBadge);
             card.addView(row1);
 
-            // Row 2: Booked Session Time
+            // Row 2: Booked Session Time & Chat Action Button
+            LinearLayout row2 = new LinearLayout(this);
+            row2.setOrientation(LinearLayout.HORIZONTAL);
+            row2.setGravity(android.view.Gravity.CENTER_VERTICAL);
+            row2.setPadding(0, 8, 0, 0);
+
             TextView tvTime = new TextView(this);
+            tvTime.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f));
             tvTime.setText("📅  Session Slot: " + (b.bookedTime != null ? b.bookedTime : "N/A"));
             tvTime.setTextColor(Color.parseColor("#94A3B8"));
             tvTime.setTextSize(13);
-            tvTime.setPadding(0, 8, 0, 0);
-            card.addView(tvTime);
+            row2.addView(tvTime);
+
+            if (b.trainerName != null && !b.trainerName.trim().isEmpty() && !"None".equalsIgnoreCase(b.trainerName)) {
+                LinearLayout btnChatBooking = new LinearLayout(this);
+                btnChatBooking.setOrientation(LinearLayout.HORIZONTAL);
+                btnChatBooking.setGravity(android.view.Gravity.CENTER);
+                btnChatBooking.setBackgroundResource(R.drawable.bg_button_selector);
+                btnChatBooking.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.parseColor("#1E293B")));
+                btnChatBooking.setPadding(20, 10, 20, 10);
+                btnChatBooking.setClickable(true);
+                btnChatBooking.setFocusable(true);
+
+                TextView tvChatBtn = new TextView(this);
+                tvChatBtn.setText("💬 Chat");
+                tvChatBtn.setTextColor(Color.parseColor("#38BDF8"));
+                tvChatBtn.setTextSize(12);
+                tvChatBtn.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+                btnChatBooking.addView(tvChatBtn);
+
+                btnChatBooking.setOnClickListener(v -> {
+                    currentMember.bookedTrainer = b.trainerName;
+                    openChatDialog();
+                });
+                row2.addView(btnChatBooking);
+            }
+            card.addView(row2);
 
             layoutBookingsHistoryList.addView(card);
         }
@@ -2297,46 +2327,200 @@ public class MemberDashboardActivity extends AppCompatActivity {
         }
     }
 
+    private ListenerRegistration memberChatListener;
+
     private void openChatDialog() {
-        if (currentMember == null || currentMember.bookedTrainer == null || currentMember.bookedTrainer.equals("None")) return;
+        if (currentMember == null || currentMember.bookedTrainer == null || currentMember.bookedTrainer.equals("None")) {
+            Toast.makeText(this, "You need to book a trainer first before opening the chat portal.", Toast.LENGTH_LONG).show();
+            return;
+        }
 
-        AlertDialog.Builder builder = new AlertDialog.Builder(this, AlertDialog.THEME_HOLO_DARK);
-        View dialogView = getLayoutInflater().inflate(R.layout.activity_verify_otp, null);
+        Trainer matchedTrainer = null;
+        for (Trainer t : trainerList) {
+            if (t.name != null && t.name.equalsIgnoreCase(currentMember.bookedTrainer)) {
+                matchedTrainer = t;
+                break;
+            }
+        }
+        final Trainer finalTrainer = matchedTrainer;
+        String trainerEmail = (matchedTrainer != null && matchedTrainer.email != null) ? matchedTrainer.email : currentMember.bookedTrainer.toLowerCase().replace(" ", "") + "@gmail.com";
+        String memberEmail = currentMember.email != null ? currentMember.email : "";
 
-        TextView title = dialogView.findViewById(R.id.title_titan_gym);
-        title.setText("CHAT PORTAL");
+        // Consistent chatId key between member and trainer
+        String chatId = memberEmail.toLowerCase() + "_" + trainerEmail.toLowerCase();
 
-        TextView instructions = dialogView.findViewById(R.id.tv_otp_instructions);
-        instructions.setText("Secure channel with " + currentMember.bookedTrainer);
+        BottomSheetDialog dialog = new BottomSheetDialog(this);
 
-        EditText etMsg = dialogView.findViewById(R.id.et_otp);
-        etMsg.setHint("Type your message...");
-        etMsg.setInputType(android.text.InputType.TYPE_CLASS_TEXT);
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setPadding(40, 24, 40, 36);
+        root.setBackgroundResource(R.drawable.bg_bottom_sheet);
 
-        TextView tvCancel = dialogView.findViewById(R.id.tv_cancel);
-        tvCancel.setText("Close Chat");
+        // Handle bar
+        View handle = new View(this);
+        LinearLayout.LayoutParams handleLp = new LinearLayout.LayoutParams(100, 10);
+        handleLp.gravity = android.view.Gravity.CENTER_HORIZONTAL;
+        handleLp.setMargins(0, 0, 0, 20);
+        handle.setLayoutParams(handleLp);
+        handle.setBackgroundResource(R.drawable.bg_input_default);
+        root.addView(handle);
 
-        LinearLayout btnSend = (LinearLayout) dialogView.findViewById(R.id.btn_verify);
-        TextView btnSendText = (TextView) btnSend.getChildAt(0);
-        btnSendText.setText("Send Message");
+        // Header Title
+        TextView tvTitle = new TextView(this);
+        tvTitle.setText("💬 CHAT WITH " + currentMember.bookedTrainer.toUpperCase());
+        tvTitle.setTextColor(Color.WHITE);
+        tvTitle.setTextSize(16);
+        tvTitle.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        tvTitle.setPadding(0, 0, 0, 16);
+        root.addView(tvTitle);
 
-        AlertDialog dialog = builder.setView(dialogView).create();
+        // Scrollable Chat Messages Container
+        ScrollView scrollView = new ScrollView(this);
+        LinearLayout.LayoutParams scrollLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, spToPx(260));
+        scrollLp.setMargins(0, 0, 0, 16);
+        scrollView.setLayoutParams(scrollLp);
+        scrollView.setBackgroundResource(R.drawable.bg_card);
+        scrollView.setPadding(16, 16, 16, 16);
 
+        LinearLayout chatContainer = new LinearLayout(this);
+        chatContainer.setOrientation(LinearLayout.VERTICAL);
+        scrollView.addView(chatContainer);
+        root.addView(scrollView);
+
+        // Input & Send Row
+        LinearLayout inputRow = new LinearLayout(this);
+        inputRow.setOrientation(LinearLayout.HORIZONTAL);
+        inputRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
+
+        EditText etMsg = new EditText(this);
+        etMsg.setHint("Type message to " + currentMember.bookedTrainer + "...");
+        etMsg.setTextColor(Color.WHITE);
+        etMsg.setHintTextColor(Color.parseColor("#64748B"));
+        etMsg.setBackgroundResource(R.drawable.bg_input_selector);
+        etMsg.setPadding(24, 18, 24, 18);
+        etMsg.setTextSize(13);
+        LinearLayout.LayoutParams etLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        etLp.setMargins(0, 0, 12, 0);
+        etMsg.setLayoutParams(etLp);
+        inputRow.addView(etMsg);
+
+        LinearLayout btnSend = new LinearLayout(this);
+        btnSend.setOrientation(LinearLayout.HORIZONTAL);
+        btnSend.setGravity(android.view.Gravity.CENTER);
+        btnSend.setBackgroundResource(R.drawable.bg_button_selector);
+        btnSend.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.parseColor("#38BDF8")));
+        btnSend.setPadding(24, 18, 24, 18);
+
+        TextView tvSend = new TextView(this);
+        tvSend.setText("Send");
+        tvSend.setTextColor(Color.WHITE);
+        tvSend.setTextSize(13);
+        tvSend.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        btnSend.addView(tvSend);
+        inputRow.addView(btnSend);
+
+        root.addView(inputRow);
+
+        // Listen in real-time to chats collection in Firestore
+        if (memberChatListener != null) memberChatListener.remove();
+        memberChatListener = db.collection("chats")
+                .whereEqualTo("chatId", chatId)
+                .addSnapshotListener((snapshots, error) -> {
+                    if (isFinishing() || isDestroyed()) return;
+                    chatContainer.removeAllViews();
+                    if (snapshots == null || snapshots.isEmpty()) {
+                        TextView tvEmpty = new TextView(this);
+                        tvEmpty.setText("No messages yet. Send a message to start chatting with your trainer!");
+                        tvEmpty.setTextColor(Color.parseColor("#94A3B8"));
+                        tvEmpty.setTextSize(12);
+                        tvEmpty.setPadding(12, 12, 12, 12);
+                        chatContainer.addView(tvEmpty);
+                        return;
+                    }
+
+                    List<DocumentSnapshot> docs = new ArrayList<>(snapshots.getDocuments());
+                    java.util.Collections.sort(docs, (d1, d2) -> {
+                        com.google.firebase.Timestamp t1 = d1.getTimestamp("timestamp");
+                        com.google.firebase.Timestamp t2 = d2.getTimestamp("timestamp");
+                        if (t1 == null || t2 == null) return 0;
+                        return t1.compareTo(t2);
+                    });
+
+                    for (DocumentSnapshot doc : docs) {
+                        String senderRole = doc.getString("senderRole");
+                        String msg = doc.getString("message");
+                        String senderName = doc.getString("senderName");
+                        if (msg == null) continue;
+
+                        boolean isMe = "member".equalsIgnoreCase(senderRole);
+
+                        LinearLayout bubble = new LinearLayout(this);
+                        bubble.setOrientation(LinearLayout.VERTICAL);
+
+                        LinearLayout.LayoutParams bubbleLp = new LinearLayout.LayoutParams(
+                                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                        bubbleLp.setMargins(0, 6, 0, 6);
+
+                        if (isMe) {
+                            bubbleLp.gravity = android.view.Gravity.END;
+                            bubble.setBackgroundResource(R.drawable.bg_button_selector);
+                            bubble.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.parseColor("#0284C7")));
+                        } else {
+                            bubbleLp.gravity = android.view.Gravity.START;
+                            bubble.setBackgroundResource(R.drawable.bg_action_card);
+                        }
+                        bubble.setLayoutParams(bubbleLp);
+                        bubble.setPadding(20, 14, 20, 14);
+
+                        TextView tvSender = new TextView(this);
+                        tvSender.setText(isMe ? "You" : (senderName != null ? senderName : "Trainer"));
+                        tvSender.setTextColor(isMe ? Color.parseColor("#E0F2FE") : Color.parseColor("#38BDF8"));
+                        tvSender.setTextSize(10);
+                        tvSender.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+                        bubble.addView(tvSender);
+
+                        TextView tvMsg = new TextView(this);
+                        tvMsg.setText(msg);
+                        tvMsg.setTextColor(Color.WHITE);
+                        tvMsg.setTextSize(13);
+                        tvMsg.setPadding(0, 2, 0, 0);
+                        bubble.addView(tvMsg);
+
+                        chatContainer.addView(bubble);
+                    }
+
+                    // Auto-scroll to bottom
+                    scrollView.post(() -> scrollView.fullScroll(View.FOCUS_DOWN));
+                });
+
+        // Send message action
         btnSend.setOnClickListener(v -> {
-            String msg = etMsg.getText().toString().trim();
-            if (msg.isEmpty()) return;
-            Toast.makeText(this, "Message sent to " + currentMember.bookedTrainer, Toast.LENGTH_SHORT).show();
-            etMsg.setText("");
+            String msgText = etMsg.getText().toString().trim();
+            if (msgText.isEmpty()) return;
 
-            // Auto response after 1.5 seconds
-            new Handler().postDelayed(() -> {
-                if (!isFinishing()) {
-                    Toast.makeText(this, currentMember.bookedTrainer + ": Got your message! Let's discuss it in our next session.", Toast.LENGTH_LONG).show();
-                }
-            }, 1500);
+            Map<String, Object> msgDoc = new HashMap<>();
+            msgDoc.put("chatId", chatId);
+            msgDoc.put("senderEmail", memberEmail);
+            msgDoc.put("senderName", currentMember.name != null ? currentMember.name : "Member");
+            msgDoc.put("senderRole", "member");
+            msgDoc.put("receiverEmail", trainerEmail);
+            msgDoc.put("receiverName", currentMember.bookedTrainer);
+            msgDoc.put("message", msgText);
+            msgDoc.put("timestamp", com.google.firebase.Timestamp.now());
+
+            db.collection("chats").add(msgDoc);
+            etMsg.setText("");
         });
 
-        tvCancel.setOnClickListener(v -> dialog.dismiss());
+        dialog.setOnDismissListener(d -> {
+            if (memberChatListener != null) {
+                memberChatListener.remove();
+                memberChatListener = null;
+            }
+        });
+
+        dialog.setContentView(root);
         dialog.show();
     }
 }

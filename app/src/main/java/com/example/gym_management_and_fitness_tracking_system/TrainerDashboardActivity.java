@@ -836,9 +836,8 @@ public class TrainerDashboardActivity extends AppCompatActivity {
                 isAssigned = true;
             } else {
                 for (Booking b : trainerBookings) {
-                    if ("Accepted".equalsIgnoreCase(b.status)
-                            && ((b.memberId != null && b.memberId.equalsIgnoreCase(m.id))
-                            || (b.memberEmail != null && m.email != null && b.memberEmail.equalsIgnoreCase(m.email)))) {
+                    if ((b.memberId != null && b.memberId.equalsIgnoreCase(m.id))
+                            || (b.memberEmail != null && m.email != null && b.memberEmail.equalsIgnoreCase(m.email))) {
                         isAssigned = true;
                         break;
                     }
@@ -1173,42 +1172,69 @@ public class TrainerDashboardActivity extends AppCompatActivity {
             if (pos >= 0 && pos < assigned.size()) {
                 Member m = assigned.get(pos);
                 String msgText = etChatMsg.getText().toString().trim();
-                if (!msgText.isEmpty()) {
-                    List<String> chat = getChatLogForMember(m.email);
-                    chat.add("Trainer: " + msgText);
-                    etChatMsg.setText("");
-                    updateChatHistory(m);
+                if (!msgText.isEmpty() && currentTrainer != null) {
+                    String trainerEmail = currentTrainer.email != null ? currentTrainer.email : "";
+                    String memberEmail = m.email != null ? m.email : "";
+                    String chatId = memberEmail.toLowerCase() + "_" + trainerEmail.toLowerCase();
 
-                    // Simulate reply
-                    new Handler().postDelayed(() -> {
-                        if (!isFinishing()) {
-                            chat.add(m.name + ": Thanks, coach! I will follow these instructions.");
-                            updateChatHistory(m);
-                        }
-                    }, 1500);
+                    Map<String, Object> msgDoc = new HashMap<>();
+                    msgDoc.put("chatId", chatId);
+                    msgDoc.put("senderEmail", trainerEmail);
+                    msgDoc.put("senderName", currentTrainer.name != null ? currentTrainer.name : "Trainer");
+                    msgDoc.put("senderRole", "trainer");
+                    msgDoc.put("receiverEmail", memberEmail);
+                    msgDoc.put("receiverName", m.name);
+                    msgDoc.put("message", msgText);
+                    msgDoc.put("timestamp", com.google.firebase.Timestamp.now());
+
+                    db.collection("chats").add(msgDoc);
+                    etChatMsg.setText("");
                 }
             }
         });
     }
 
-    private List<String> getChatLogForMember(String email) {
-        if (!memberChatLogs.containsKey(email)) {
-            List<String> list = new ArrayList<>();
-            list.add("[System] Secure encryption active.");
-            list.add("Member: Hi trainer, what is my schedule today?");
-            list.add("Trainer: Hello! Your routine and plans have been updated. Check them on your dashboard.");
-            memberChatLogs.put(email, list);
-        }
-        return memberChatLogs.get(email);
-    }
+    private ListenerRegistration trainerChatListener;
 
     private void updateChatHistory(Member m) {
-        List<String> chat = getChatLogForMember(m.email);
-        StringBuilder sb = new StringBuilder();
-        for (String s : chat) {
-            sb.append(s).append("\n\n");
-        }
-        tvChatHistory.setText(sb.toString());
+        if (m == null || currentTrainer == null) return;
+        String trainerEmail = currentTrainer.email != null ? currentTrainer.email : "";
+        String memberEmail = m.email != null ? m.email : "";
+
+        String chatId = memberEmail.toLowerCase() + "_" + trainerEmail.toLowerCase();
+
+        if (trainerChatListener != null) trainerChatListener.remove();
+
+        trainerChatListener = db.collection("chats")
+                .whereEqualTo("chatId", chatId)
+                .addSnapshotListener((snapshots, error) -> {
+                    if (isFinishing() || isDestroyed()) return;
+                    if (snapshots == null || snapshots.isEmpty()) {
+                        tvChatHistory.setText("💬 Secure Channel Active\nNo messages yet with " + m.name + ". Send a message below!");
+                        return;
+                    }
+
+                    List<DocumentSnapshot> docs = new ArrayList<>(snapshots.getDocuments());
+                    java.util.Collections.sort(docs, (d1, d2) -> {
+                        com.google.firebase.Timestamp t1 = d1.getTimestamp("timestamp");
+                        com.google.firebase.Timestamp t2 = d2.getTimestamp("timestamp");
+                        if (t1 == null || t2 == null) return 0;
+                        return t1.compareTo(t2);
+                    });
+
+                    StringBuilder sb = new StringBuilder();
+                    for (DocumentSnapshot doc : docs) {
+                        String senderRole = doc.getString("senderRole");
+                        String senderName = doc.getString("senderName");
+                        String msg = doc.getString("message");
+                        if (msg == null) continue;
+
+                        boolean isMe = "trainer".equalsIgnoreCase(senderRole);
+                        String displayName = isMe ? "You (Trainer)" : (senderName != null ? senderName : "Member");
+                        sb.append(displayName).append(":\n").append(msg).append("\n\n");
+                    }
+                    tvChatHistory.setText(sb.toString().trim());
+                });
     }
 
     // Helper conversion
