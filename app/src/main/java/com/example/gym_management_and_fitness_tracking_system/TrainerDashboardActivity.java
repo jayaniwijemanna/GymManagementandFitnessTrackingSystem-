@@ -26,8 +26,12 @@ import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.ListenerRegistration;
+import com.google.firebase.firestore.QuerySnapshot;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -53,8 +57,9 @@ public class TrainerDashboardActivity extends AppCompatActivity {
     private ImageView imgNavMembers, imgNavPlans, imgNavProgress, imgNavReviews;
     private TextView tvNavMembers, tvNavPlans, tvNavProgress, tvNavReviews;
 
-    // Tab 1: Members elements
+    // Tab 1: Bookings / Members elements
     private LinearLayout layoutMembersList, layoutEmptyMembers;
+    private TextView tvPendingCountBadge, tvStatTotal, tvStatPending, tvStatApproved;
 
     // Tab 2: Plans elements
     private Spinner spinnerPlanMember;
@@ -77,6 +82,7 @@ public class TrainerDashboardActivity extends AppCompatActivity {
     private final Map<String, List<String>> memberChatLogs = new HashMap<>();
 
     private FirebaseFirestore db;
+    private FirebaseAuth mAuth;
     private ListenerRegistration bookingsListener;
     private ListenerRegistration membersListener;
     private final List<Booking> trainerBookings = new ArrayList<>();
@@ -88,6 +94,7 @@ public class TrainerDashboardActivity extends AppCompatActivity {
         setContentView(R.layout.activity_trainer_dashboard);
 
         db = FirebaseFirestore.getInstance();
+        mAuth = FirebaseAuth.getInstance();
 
         // Apply Insets
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.layout_header), (v, insets) -> {
@@ -96,30 +103,145 @@ public class TrainerDashboardActivity extends AppCompatActivity {
             return insets;
         });
 
-        // Retrieve current trainer
-        String trainerEmail = getIntent().getStringExtra("TRAINER_EMAIL");
-        currentTrainer = null;
-        if (!TextUtils.isEmpty(trainerEmail)) {
-            for (Trainer t : DataStore.getInstance().trainers) {
-                if (t.email != null && t.email.equalsIgnoreCase(trainerEmail)) {
-                    currentTrainer = t;
-                    break;
-                }
-            }
-        }
-
-        // Fallback for safety
-        if (currentTrainer == null) {
-            if (!DataStore.getInstance().trainers.isEmpty()) {
-                currentTrainer = DataStore.getInstance().trainers.get(0);
-            } else {
-                currentTrainer = new Trainer("Alex Mercer", "Strength & Conditioning", "555-0199", "alex@gmail.com", "password");
-                DataStore.getInstance().trainers.add(currentTrainer);
-            }
-        }
-
+        // Initialize views immediately so Firestore callbacks can update them
         initializeViews();
         setupNavigation();
+
+        // Load trainer from Firestore — never fall back to hardcoded data
+        String trainerEmail = getIntent().getStringExtra("TRAINER_EMAIL");
+        loadTrainerAndSetup(trainerEmail);
+    }
+
+    /**
+     * Loads the logged-in trainer's profile from Firestore.
+     * Priority: Firebase Auth UID → email query → DataStore cache.
+     * Never falls back to hardcoded data.
+     */
+    private void loadTrainerAndSetup(String trainerEmail) {
+        FirebaseUser firebaseUser = mAuth.getCurrentUser();
+
+        if (firebaseUser != null) {
+            // Primary: load by Firebase Auth UID
+            db.collection("users").document(firebaseUser.getUid()).get()
+                    .addOnSuccessListener(doc -> {
+                        if (doc.exists()) {
+                            Trainer t = doc.toObject(Trainer.class);
+                            if (t != null && "trainer".equalsIgnoreCase(t.role)) {
+                                t.id = doc.getId();
+                                currentTrainer = t;
+                                // Sync to DataStore
+                                syncTrainerToDataStore(t);
+                                onTrainerLoaded();
+                                return;
+                            }
+                        }
+                        // UID doc not a trainer — fall back to email query
+                        loadTrainerByEmail(trainerEmail);
+                    })
+                    .addOnFailureListener(e -> loadTrainerByEmail(trainerEmail));
+        } else {
+            // No Firebase Auth session — query by email directly
+            loadTrainerByEmail(trainerEmail);
+        }
+    }
+
+    /**
+     * Fallback: query the 'users' collection by email to find the trainer document.
+     */
+    private void loadTrainerByEmail(String email) {
+        if (TextUtils.isEmpty(email)) {
+            // Email not provided — check DataStore cache from a previous session
+            if (!DataStore.getInstance().trainers.isEmpty()) {
+                currentTrainer = DataStore.getInstance().trainers.get(0);
+                onTrainerLoaded();
+            } else {
+                // Truly nothing available — return to login
+                Toast.makeText(this, "Could not load trainer profile. Please log in again.", Toast.LENGTH_LONG).show();
+                Intent intent = new Intent(this, MainActivity.class);
+                intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                startActivity(intent);
+                finish();
+            }
+            return;
+        }
+
+        db.collection("users")
+                .whereEqualTo("email", email)
+                .whereEqualTo("role", "trainer")
+                .get()
+                .addOnSuccessListener((QuerySnapshot qs) -> {
+                    if (!qs.isEmpty()) {
+                        DocumentSnapshot doc = qs.getDocuments().get(0);
+                        Trainer t = doc.toObject(Trainer.class);
+                        if (t != null) {
+                            t.id = doc.getId();
+                            currentTrainer = t;
+                            syncTrainerToDataStore(t);
+                            onTrainerLoaded();
+                            return;
+                        }
+                    }
+                    // Firestore returned nothing — last resort: DataStore cache
+                    Trainer cached = null;
+                    for (Trainer t : DataStore.getInstance().trainers) {
+                        if (t.email != null && t.email.equalsIgnoreCase(email)) {
+                            cached = t;
+                            break;
+                        }
+                    }
+                    if (cached != null) {
+                        currentTrainer = cached;
+                        onTrainerLoaded();
+                    } else {
+                        Toast.makeText(this, "Trainer account not found. Please contact admin.", Toast.LENGTH_LONG).show();
+                        Intent intent = new Intent(this, MainActivity.class);
+                        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                        startActivity(intent);
+                        finish();
+                    }
+                })
+                .addOnFailureListener(e -> {
+                    // Network error — check DataStore cache
+                    Trainer cached = null;
+                    if (!TextUtils.isEmpty(email)) {
+                        for (Trainer t : DataStore.getInstance().trainers) {
+                            if (t.email != null && t.email.equalsIgnoreCase(email)) {
+                                cached = t;
+                                break;
+                            }
+                        }
+                    }
+                    if (cached != null) {
+                        currentTrainer = cached;
+                        Toast.makeText(this, "Loaded in offline mode.", Toast.LENGTH_SHORT).show();
+                        onTrainerLoaded();
+                    } else {
+                        Toast.makeText(this, "Network error. Please try again.", Toast.LENGTH_LONG).show();
+                        Intent intent = new Intent(this, MainActivity.class);
+                        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                        startActivity(intent);
+                        finish();
+                    }
+                });
+    }
+
+    /** Keep the DataStore trainer list in sync. */
+    private void syncTrainerToDataStore(Trainer t) {
+        List<Trainer> trainers = DataStore.getInstance().trainers;
+        for (int i = 0; i < trainers.size(); i++) {
+            if (trainers.get(i).email != null && trainers.get(i).email.equalsIgnoreCase(t.email)) {
+                trainers.set(i, t);
+                return;
+            }
+        }
+        trainers.add(t);
+    }
+
+    /**
+     * Called once currentTrainer is confirmed loaded from Firestore (or cache).
+     * Sets up all UI and starts real-time listeners.
+     */
+    private void onTrainerLoaded() {
         setupHeader();
         listenToMembersRealtime();
         listenToTrainerBookingsRealtime();
@@ -203,6 +325,10 @@ public class TrainerDashboardActivity extends AppCompatActivity {
         // Tab 1
         layoutMembersList = findViewById(R.id.layout_members_list);
         layoutEmptyMembers = findViewById(R.id.layout_empty_members);
+        tvPendingCountBadge = findViewById(R.id.tv_pending_count_badge);
+        tvStatTotal = findViewById(R.id.tv_stat_total);
+        tvStatPending = findViewById(R.id.tv_stat_pending);
+        tvStatApproved = findViewById(R.id.tv_stat_approved);
 
         // Tab 2
         spinnerPlanMember = findViewById(R.id.spinner_plan_member);
@@ -297,11 +423,40 @@ public class TrainerDashboardActivity extends AppCompatActivity {
         txt.setTextColor(Color.parseColor("#34C759"));
     }
 
-    // ==================== TAB 1: MEMBERS LIST / BOOKINGS ====================
+    // ==================== TAB 1: BOOKING REQUESTS ====================
     private void refreshMembersTab() {
         layoutMembersList.removeAllViews();
 
-        if (trainerBookings.isEmpty()) {
+        // Compute stats — exclude "Attended" bookings
+        int totalCount = 0;
+        int pendingCount = 0;
+        int approvedCount = 0;
+        for (Booking b : trainerBookings) {
+            String s = b.status != null ? b.status : "Pending";
+            if ("Attended".equalsIgnoreCase(s)) continue;
+            totalCount++;
+            if ("Pending".equalsIgnoreCase(s)) pendingCount++;
+            else if ("Accepted".equalsIgnoreCase(s)) approvedCount++;
+        }
+
+        // Update stat views
+        if (tvStatTotal != null) tvStatTotal.setText(String.valueOf(totalCount));
+        if (tvStatPending != null) tvStatPending.setText(String.valueOf(pendingCount));
+        if (tvStatApproved != null) tvStatApproved.setText(String.valueOf(approvedCount));
+
+        // Update pending badge in header
+        if (tvPendingCountBadge != null) {
+            if (pendingCount > 0) {
+                tvPendingCountBadge.setText(pendingCount + " Pending");
+                tvPendingCountBadge.setVisibility(View.VISIBLE);
+                viewNotificationBadge.setVisibility(View.VISIBLE);
+            } else {
+                tvPendingCountBadge.setVisibility(View.GONE);
+            }
+        }
+
+        // Show empty state if no displayable (non-Attended) bookings exist
+        if (totalCount == 0) {
             layoutEmptyMembers.setVisibility(View.VISIBLE);
             return;
         }
@@ -309,78 +464,178 @@ public class TrainerDashboardActivity extends AppCompatActivity {
 
         LayoutInflater inflater = LayoutInflater.from(this);
         for (Booking b : trainerBookings) {
-            View itemView = inflater.inflate(R.layout.item_member, layoutMembersList, false);
+            // Skip attended — trainer sees only Pending / Accepted / Rejected
+            String bStatus = b.status != null ? b.status : "Pending";
+            if ("Attended".equalsIgnoreCase(bStatus)) continue;
 
-            TextView tvInitials = itemView.findViewById(R.id.tv_member_initials);
-            TextView tvName = itemView.findViewById(R.id.tv_member_name);
-            TextView tvPlan = itemView.findViewById(R.id.tv_member_plan);
-            ImageView btnEdit = itemView.findViewById(R.id.btn_edit_member);
-            ImageView btnDelete = itemView.findViewById(R.id.btn_delete_member);
+            View itemView = inflater.inflate(R.layout.item_booking_request, layoutMembersList, false);
 
-            // Member initials helper
+            TextView tvInitials = itemView.findViewById(R.id.tv_booking_initials);
+            TextView tvMemberName = itemView.findViewById(R.id.tv_booking_member_name);
+            TextView tvTime = itemView.findViewById(R.id.tv_booking_time);
+            TextView tvPhone = itemView.findViewById(R.id.tv_booking_phone);
+            TextView tvStatusBadge = itemView.findViewById(R.id.tv_booking_status_badge);
+            LinearLayout btnApprove = itemView.findViewById(R.id.btn_approve_booking);
+            LinearLayout btnDecline = itemView.findViewById(R.id.btn_decline_booking);
+            LinearLayout layoutActions = itemView.findViewById(R.id.layout_action_buttons);
+            TextView tvResolved = itemView.findViewById(R.id.tv_resolved_label);
+
+            // Initials
             String initials = "?";
             if (b.memberName != null && !b.memberName.isEmpty()) {
                 String[] parts = b.memberName.trim().split("\\s+");
                 if (parts.length == 1) initials = String.valueOf(parts[0].charAt(0)).toUpperCase();
                 else initials = (String.valueOf(parts[0].charAt(0)) + String.valueOf(parts[1].charAt(0))).toUpperCase();
             }
-
             tvInitials.setText(initials);
-            tvName.setText((b.memberName != null ? b.memberName : "Member") + "  |  " + (b.bookedTime != null ? b.bookedTime : "Time N/A"));
+            tvMemberName.setText(b.memberName != null ? b.memberName : "Member");
+            tvTime.setText(b.bookedTime != null ? b.bookedTime : "Time N/A");
+            tvPhone.setText(b.memberPhone != null && !b.memberPhone.isEmpty() ? b.memberPhone : "No phone");
 
-            String bStatus = b.status != null ? b.status : "Pending";
-            tvPlan.setText("Status: " + bStatus + "  (" + (b.memberPhone != null ? b.memberPhone : "") + ")");
-
-            if ("Pending".equalsIgnoreCase(bStatus)) {
-                tvPlan.setTextColor(Color.parseColor("#FF9500"));
-                btnEdit.setVisibility(View.VISIBLE);
-                btnDelete.setVisibility(View.VISIBLE);
-            } else if ("Accepted".equalsIgnoreCase(bStatus)) {
-                tvPlan.setTextColor(Color.parseColor("#34C759"));
-                btnEdit.setVisibility(View.GONE);
-                btnDelete.setVisibility(View.VISIBLE); // Allow cancelling/rejecting
-            } else if ("Rejected".equalsIgnoreCase(bStatus)) {
-                tvPlan.setTextColor(Color.parseColor("#FF3B30"));
-                btnEdit.setVisibility(View.VISIBLE); // Allow accepting again
-                btnDelete.setVisibility(View.GONE);
-            } else {
-                tvPlan.setTextColor(Color.parseColor("#94A3B8"));
+            // Configure status badge + action visibility
+            switch (bStatus.toLowerCase()) {
+                case "pending":
+                    tvStatusBadge.setText("PENDING");
+                    tvStatusBadge.getBackground().setTint(Color.parseColor("#FF9500"));
+                    layoutActions.setVisibility(View.VISIBLE);
+                    tvResolved.setVisibility(View.GONE);
+                    break;
+                case "accepted":
+                    tvStatusBadge.setText("APPROVED");
+                    tvStatusBadge.getBackground().setTint(Color.parseColor("#34C759"));
+                    layoutActions.setVisibility(View.GONE);
+                    tvResolved.setVisibility(View.VISIBLE);
+                    tvResolved.setText("✓  Approved — Member has been notified");
+                    tvResolved.setTextColor(Color.parseColor("#34C759"));
+                    break;
+                case "rejected":
+                    tvStatusBadge.setText("DECLINED");
+                    tvStatusBadge.getBackground().setTint(Color.parseColor("#FF3B30"));
+                    layoutActions.setVisibility(View.GONE);
+                    tvResolved.setVisibility(View.VISIBLE);
+                    tvResolved.setText("✗  Declined — Member has been notified");
+                    tvResolved.setTextColor(Color.parseColor("#FF3B30"));
+                    break;
+                default:
+                    tvStatusBadge.setText(bStatus.toUpperCase());
+                    tvStatusBadge.getBackground().setTint(Color.parseColor("#94A3B8"));
+                    layoutActions.setVisibility(View.GONE);
+                    tvResolved.setVisibility(View.GONE);
+                    break;
             }
 
-            // Accept Button Action
-            btnEdit.setImageResource(R.drawable.ic_check);
-            btnEdit.setColorFilter(Color.parseColor("#34C759"));
-            btnEdit.setOnClickListener(v -> {
-                b.status = "Accepted";
-                if (b.id != null && !b.id.isEmpty()) {
-                    db.collection("bookings").document(b.id).update("status", "Accepted")
-                            .addOnSuccessListener(aVoid -> Toast.makeText(this, "Accepted booking for " + b.memberName, Toast.LENGTH_SHORT).show())
-                            .addOnFailureListener(e -> Toast.makeText(this, "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show());
-                }
-                if (b.memberId != null && !b.memberId.isEmpty()) {
-                    db.collection("users").document(b.memberId).update("bookingStatus", "Accepted");
-                }
-                refreshMembersTab();
+            // Approve button
+            btnApprove.setOnClickListener(v -> {
+                new AlertDialog.Builder(this, AlertDialog.THEME_HOLO_DARK)
+                        .setTitle("Approve Booking")
+                        .setMessage("Approve session with " + b.memberName + "\nScheduled: " + b.bookedTime + "?")
+                        .setPositiveButton("Approve", (dialog, which) -> approveBooking(b))
+                        .setNegativeButton("Cancel", null)
+                        .show();
             });
 
-            // Reject Button Action
-            btnDelete.setImageResource(R.drawable.ic_delete);
-            btnDelete.setColorFilter(Color.parseColor("#FF3B30"));
-            btnDelete.setOnClickListener(v -> {
-                b.status = "Rejected";
-                if (b.id != null && !b.id.isEmpty()) {
-                    db.collection("bookings").document(b.id).update("status", "Rejected")
-                            .addOnSuccessListener(aVoid -> Toast.makeText(this, "Rejected booking for " + b.memberName, Toast.LENGTH_SHORT).show())
-                            .addOnFailureListener(e -> Toast.makeText(this, "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show());
-                }
-                if (b.memberId != null && !b.memberId.isEmpty()) {
-                    db.collection("users").document(b.memberId).update("bookingStatus", "Rejected");
-                }
-                refreshMembersTab();
+            // Decline button
+            btnDecline.setOnClickListener(v -> {
+                new AlertDialog.Builder(this, AlertDialog.THEME_HOLO_DARK)
+                        .setTitle("Decline Booking")
+                        .setMessage("Decline session with " + b.memberName + "?\nThe member will be notified.")
+                        .setPositiveButton("Decline", (dialog, which) -> declineBooking(b))
+                        .setNegativeButton("Cancel", null)
+                        .show();
             });
 
             layoutMembersList.addView(itemView);
         }
+    }
+
+    /** Approve a booking: update Firestore + push notification to member **/
+    private void approveBooking(Booking b) {
+        b.status = "Accepted";
+
+        // Update bookings collection
+        if (b.id != null && !b.id.isEmpty()) {
+            db.collection("bookings").document(b.id).update("status", "Accepted")
+                    .addOnSuccessListener(aVoid -> {
+                        Toast.makeText(this, "✓ Approved: " + b.memberName, Toast.LENGTH_SHORT).show();
+                    })
+                    .addOnFailureListener(e -> Toast.makeText(this, "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show());
+        }
+
+        // Update member's bookingStatus in users collection
+        if (b.memberId != null && !b.memberId.isEmpty()) {
+            Map<String, Object> updates = new HashMap<>();
+            updates.put("bookingStatus", "Accepted");
+            updates.put("bookedTrainer", currentTrainer.name);
+            db.collection("users").document(b.memberId).update(updates);
+
+            // Push a notification document into Firestore for the member to receive
+            pushNotificationToMember(
+                    b.memberId,
+                    b.memberName,
+                    "📅 Booking Approved!",
+                    "Your training session with " + currentTrainer.name + " on " + b.bookedTime + " has been APPROVED. See you at the gym!"
+            );
+        }
+
+        refreshMembersTab();
+    }
+
+    /** Decline a booking: update Firestore + push notification to member **/
+    private void declineBooking(Booking b) {
+        b.status = "Rejected";
+
+        // Update bookings collection
+        if (b.id != null && !b.id.isEmpty()) {
+            db.collection("bookings").document(b.id).update("status", "Rejected")
+                    .addOnSuccessListener(aVoid -> {
+                        Toast.makeText(this, "Declined booking for " + b.memberName, Toast.LENGTH_SHORT).show();
+                    })
+                    .addOnFailureListener(e -> Toast.makeText(this, "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show());
+        }
+
+        // Update member's bookingStatus in users collection
+        if (b.memberId != null && !b.memberId.isEmpty()) {
+            db.collection("users").document(b.memberId).update("bookingStatus", "Rejected");
+
+            // Push a notification document into Firestore for the member to receive
+            pushNotificationToMember(
+                    b.memberId,
+                    b.memberName,
+                    "❌ Booking Declined",
+                    "Your training session request with " + currentTrainer.name + " on " + b.bookedTime + " has been declined. Please choose another time slot."
+            );
+        }
+
+        refreshMembersTab();
+    }
+
+    /**
+     * Push a notification document to the Firestore 'notifications' collection.
+     * MemberDashboardActivity listens to this collection and surfaces it to the user.
+     */
+    private void pushNotificationToMember(String memberId, String memberName, String title, String message) {
+        Map<String, Object> notif = new HashMap<>();
+        notif.put("memberId", memberId);
+        notif.put("memberName", memberName != null ? memberName : "");
+        notif.put("title", title);
+        notif.put("message", message);
+        notif.put("type", "booking_status");
+        notif.put("trainerName", currentTrainer != null ? currentTrainer.name : "");
+        notif.put("read", false);
+        notif.put("timestamp", com.google.firebase.Timestamp.now());
+
+        db.collection("notifications").add(notif)
+                .addOnSuccessListener(ref -> {
+                    // Also append a quick in-app notification message to the member's user document
+                    // so that even if real-time listener catches it, the dashboard badge updates
+                    if (memberId != null && !memberId.isEmpty()) {
+                        db.collection("users").document(memberId)
+                                .update("lastNotification", message);
+                    }
+                })
+                .addOnFailureListener(e -> {
+                    // Non-critical — booking status already updated
+                });
     }
 
     private List<Member> getAssignedMembers() {

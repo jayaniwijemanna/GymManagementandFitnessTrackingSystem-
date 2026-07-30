@@ -66,6 +66,7 @@ public class MemberDashboardActivity extends AppCompatActivity {
     private ListenerRegistration packagesListener;
     private ListenerRegistration trainersListener;
     private ListenerRegistration bookingsListener;
+    private ListenerRegistration notificationsListener;
     private final List<Booking> memberBookings = new ArrayList<>();
 
     // QR Scanner launcher
@@ -318,6 +319,7 @@ public class MemberDashboardActivity extends AppCompatActivity {
         setupHeader();
         if (currentMember != null && currentMember.id != null && !currentMember.id.isEmpty()) {
             listenToBookingsRealtime(currentMember.id);
+            listenToBookingNotificationsRealtime(currentMember.id);
         }
         refreshHomeTab();
         setupProgramsTab();
@@ -388,6 +390,7 @@ public class MemberDashboardActivity extends AppCompatActivity {
         if (packagesListener != null) packagesListener.remove();
         if (trainersListener != null) trainersListener.remove();
         if (bookingsListener != null) bookingsListener.remove();
+        if (notificationsListener != null) notificationsListener.remove();
     }
 
     private void listenToBookingsRealtime(String memberId) {
@@ -410,6 +413,40 @@ public class MemberDashboardActivity extends AppCompatActivity {
                         refreshHomeTab();
                         setupProgramsTab();
                         setupBookingsTab();
+                    }
+                });
+    }
+
+    /**
+     * Real-time listener for the 'notifications' Firestore collection, filtered by memberId.
+     * Surfaces new booking-status notifications (Approved / Declined) to the member's bell icon.
+     */
+    private void listenToBookingNotificationsRealtime(String memberId) {
+        if (TextUtils.isEmpty(memberId)) return;
+        if (notificationsListener != null) notificationsListener.remove();
+
+        notificationsListener = db.collection("notifications")
+                .whereEqualTo("memberId", memberId)
+                .whereEqualTo("read", false)
+                .addSnapshotListener((value, error) -> {
+                    if (error != null || value == null) return;
+                    for (DocumentSnapshot doc : value.getDocuments()) {
+                        String title   = doc.getString("title");
+                        String message = doc.getString("message");
+                        if (message == null || message.isEmpty()) continue;
+
+                        String fullMsg = (title != null && !title.isEmpty())
+                                ? title + ": " + message
+                                : message;
+
+                        // Add to in-memory notification list if not already present
+                        if (currentMember != null && !currentMember.notifications.contains(fullMsg)) {
+                            currentMember.notifications.add(fullMsg);
+                            updateNotificationBadge();
+                        }
+
+                        // Mark as read in Firestore so it's not surfaced again
+                        doc.getReference().update("read", true);
                     }
                 });
     }
@@ -1194,26 +1231,43 @@ public class MemberDashboardActivity extends AppCompatActivity {
         if (layoutBookingsHistoryList == null) return;
         layoutBookingsHistoryList.removeAllViews();
 
-        int total = memberBookings.size();
+        // Count only non-attended bookings for stats
+        int total = 0;
         int pending = 0;
         int accepted = 0;
 
         for (Booking b : memberBookings) {
-            if ("Pending".equalsIgnoreCase(b.status)) pending++;
-            else if ("Accepted".equalsIgnoreCase(b.status)) accepted++;
+            String s = b.status != null ? b.status : "Pending";
+            if ("Attended".equalsIgnoreCase(s)) continue; // exclude attended from member view
+            total++;
+            if ("Pending".equalsIgnoreCase(s)) pending++;
+            else if ("Accepted".equalsIgnoreCase(s)) accepted++;
         }
 
         if (tvBookingStatTotal != null) tvBookingStatTotal.setText(String.valueOf(total));
         if (tvBookingStatPending != null) tvBookingStatPending.setText(String.valueOf(pending));
         if (tvBookingStatAccepted != null) tvBookingStatAccepted.setText(String.valueOf(accepted));
 
-        if (memberBookings.isEmpty()) {
+        // Check if there are any displayable bookings
+        boolean hasDisplayable = false;
+        for (Booking b : memberBookings) {
+            if (!"Attended".equalsIgnoreCase(b.status)) {
+                hasDisplayable = true;
+                break;
+            }
+        }
+
+        if (memberBookings.isEmpty() || !hasDisplayable) {
             if (tvEmptyBookingsHistory != null) tvEmptyBookingsHistory.setVisibility(View.VISIBLE);
             return;
         }
         if (tvEmptyBookingsHistory != null) tvEmptyBookingsHistory.setVisibility(View.GONE);
 
         for (Booking b : memberBookings) {
+            // Skip attended bookings — not shown in member section
+            String statusStr = b.status != null ? b.status : "Pending";
+            if ("Attended".equalsIgnoreCase(statusStr)) continue;
+
             LinearLayout card = new LinearLayout(this);
             card.setOrientation(LinearLayout.VERTICAL);
             card.setBackgroundResource(R.drawable.bg_card);
@@ -1241,8 +1295,6 @@ public class MemberDashboardActivity extends AppCompatActivity {
             tvBadge.setTextSize(11);
             tvBadge.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
             tvBadge.setBackgroundResource(R.drawable.bg_badge);
-
-            String statusStr = b.status != null ? b.status : "Pending";
             tvBadge.setText(statusStr);
 
             if ("Accepted".equalsIgnoreCase(statusStr)) {
@@ -1252,6 +1304,7 @@ public class MemberDashboardActivity extends AppCompatActivity {
                 tvBadge.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.parseColor("#2D1010")));
                 tvBadge.setTextColor(Color.parseColor("#FF3B30"));
             } else {
+                // Pending
                 tvBadge.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.parseColor("#2A1A0D")));
                 tvBadge.setTextColor(Color.parseColor("#FF9500"));
             }
