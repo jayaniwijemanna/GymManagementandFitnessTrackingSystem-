@@ -540,17 +540,81 @@ public class MemberDashboardActivity extends AppCompatActivity {
         // Clear badge
         viewNotificationBadge.setVisibility(View.GONE);
 
-        AlertDialog.Builder builder = new AlertDialog.Builder(this, AlertDialog.THEME_HOLO_DARK);
-        builder.setTitle("Notifications Alert");
+        BottomSheetDialog dialog = new BottomSheetDialog(this);
 
-        if (currentMember == null || currentMember.notifications.isEmpty()) {
-            builder.setMessage("No new notifications.");
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setPadding(40, 24, 40, 36);
+        root.setBackgroundResource(R.drawable.bg_bottom_sheet);
+
+        // Handle bar
+        View handle = new View(this);
+        LinearLayout.LayoutParams handleLp = new LinearLayout.LayoutParams(100, 10);
+        handleLp.gravity = android.view.Gravity.CENTER_HORIZONTAL;
+        handleLp.setMargins(0, 0, 0, 24);
+        handle.setLayoutParams(handleLp);
+        handle.setBackgroundResource(R.drawable.bg_input_default);
+        root.addView(handle);
+
+        // Header Title
+        TextView tvTitle = new TextView(this);
+        tvTitle.setText("🔔 NOTIFICATIONS");
+        tvTitle.setTextColor(Color.WHITE);
+        tvTitle.setTextSize(18);
+        tvTitle.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        tvTitle.setPadding(0, 0, 0, 16);
+        root.addView(tvTitle);
+
+        // Notifications content container
+        LinearLayout contentLayout = new LinearLayout(this);
+        contentLayout.setOrientation(LinearLayout.VERTICAL);
+        contentLayout.setBackgroundResource(R.drawable.bg_action_card);
+        contentLayout.setPadding(24, 20, 24, 20);
+
+        if (currentMember == null || currentMember.notifications == null || currentMember.notifications.isEmpty()) {
+            TextView tvEmpty = new TextView(this);
+            tvEmpty.setText("No new notifications.");
+            tvEmpty.setTextColor(Color.parseColor("#94A3B8"));
+            tvEmpty.setTextSize(13);
+            contentLayout.addView(tvEmpty);
         } else {
-            String[] array = currentMember.notifications.toArray(new String[0]);
-            builder.setItems(array, null);
+            for (int i = currentMember.notifications.size() - 1; i >= 0; i--) {
+                String notifText = currentMember.notifications.get(i);
+                TextView tvItem = new TextView(this);
+                tvItem.setText("• " + notifText);
+                tvItem.setTextColor(Color.parseColor("#E2E8F0"));
+                tvItem.setTextSize(13);
+                tvItem.setPadding(0, 8, 0, 8);
+                contentLayout.addView(tvItem);
+            }
         }
+        root.addView(contentLayout);
 
-        builder.setPositiveButton("Clear All", (dialog, which) -> {
+        // Action Buttons Row
+        LinearLayout btnRow = new LinearLayout(this);
+        btnRow.setOrientation(LinearLayout.HORIZONTAL);
+        btnRow.setPadding(0, 24, 0, 0);
+
+        // Clear All Button
+        LinearLayout btnClear = new LinearLayout(this);
+        btnClear.setOrientation(LinearLayout.HORIZONTAL);
+        btnClear.setGravity(android.view.Gravity.CENTER);
+        btnClear.setBackgroundResource(R.drawable.bg_button_selector);
+        btnClear.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.parseColor("#DC2626")));
+        btnClear.setPadding(24, 20, 24, 20);
+        LinearLayout.LayoutParams clearLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        clearLp.setMargins(0, 0, 8, 0);
+        btnClear.setLayoutParams(clearLp);
+
+        TextView tvClear = new TextView(this);
+        tvClear.setText("Clear All");
+        tvClear.setTextColor(Color.WHITE);
+        tvClear.setTextSize(14);
+        tvClear.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        btnClear.addView(tvClear);
+
+        btnClear.setOnClickListener(v -> {
+            dialog.dismiss();
             if (currentMember != null) {
                 currentMember.notifications.clear();
                 if (currentMember.id != null && !currentMember.id.isEmpty()) {
@@ -561,8 +625,33 @@ public class MemberDashboardActivity extends AppCompatActivity {
             updateNotificationBadge();
             Toast.makeText(this, "Notifications cleared", Toast.LENGTH_SHORT).show();
         });
-        builder.setNegativeButton("Close", null);
-        builder.show();
+        btnRow.addView(btnClear);
+
+        // Close Button
+        LinearLayout btnClose = new LinearLayout(this);
+        btnClose.setOrientation(LinearLayout.HORIZONTAL);
+        btnClose.setGravity(android.view.Gravity.CENTER);
+        btnClose.setBackgroundResource(R.drawable.bg_button_selector);
+        btnClose.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.parseColor("#334155")));
+        btnClose.setPadding(24, 20, 24, 20);
+        LinearLayout.LayoutParams closeLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        closeLp.setMargins(8, 0, 0, 0);
+        btnClose.setLayoutParams(closeLp);
+
+        TextView tvClose = new TextView(this);
+        tvClose.setText("Close");
+        tvClose.setTextColor(Color.WHITE);
+        tvClose.setTextSize(14);
+        tvClose.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        btnClose.addView(tvClose);
+
+        btnClose.setOnClickListener(v -> dialog.dismiss());
+        btnRow.addView(btnClose);
+
+        root.addView(btnRow);
+
+        dialog.setContentView(root);
+        dialog.show();
     }
 
     // Swapping content screens
@@ -1462,6 +1551,111 @@ public class MemberDashboardActivity extends AppCompatActivity {
      * Uses the Titan Gym dark theme bottom sheet format.
      */
     private void showBookingDialog(Trainer trainer) {
+        // Enforce active membership plan validation
+        boolean hasActivePlan = currentMember != null
+                && currentMember.plan != null
+                && !currentMember.plan.trim().isEmpty()
+                && !"None".equalsIgnoreCase(currentMember.plan)
+                && !"No Package".equalsIgnoreCase(currentMember.plan)
+                && "Active".equalsIgnoreCase(currentMember.planStatus);
+
+        if (!hasActivePlan) {
+            BottomSheetDialog dialog = new BottomSheetDialog(this);
+
+            LinearLayout root = new LinearLayout(this);
+            root.setOrientation(LinearLayout.VERTICAL);
+            root.setPadding(40, 24, 40, 36);
+            root.setBackgroundResource(R.drawable.bg_bottom_sheet);
+
+            // Handle bar
+            View handle = new View(this);
+            LinearLayout.LayoutParams handleLp = new LinearLayout.LayoutParams(100, 10);
+            handleLp.gravity = android.view.Gravity.CENTER_HORIZONTAL;
+            handleLp.setMargins(0, 0, 0, 24);
+            handle.setLayoutParams(handleLp);
+            handle.setBackgroundResource(R.drawable.bg_input_default);
+            root.addView(handle);
+
+            // Header Title
+            TextView tvTitle = new TextView(this);
+            tvTitle.setText("⚠️ MEMBERSHIP INACTIVE");
+            tvTitle.setTextColor(Color.parseColor("#FF9500"));
+            tvTitle.setTextSize(18);
+            tvTitle.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+            tvTitle.setPadding(0, 0, 0, 16);
+            root.addView(tvTitle);
+
+            // Card Message
+            LinearLayout cardMsg = new LinearLayout(this);
+            cardMsg.setOrientation(LinearLayout.VERTICAL);
+            cardMsg.setBackgroundResource(R.drawable.bg_action_card);
+            cardMsg.setPadding(24, 20, 24, 20);
+
+            TextView tvMsg = new TextView(this);
+            tvMsg.setText("Your gym membership plan is not active. You must have an active membership package to book a personal trainer.");
+            tvMsg.setTextColor(Color.parseColor("#E2E8F0"));
+            tvMsg.setTextSize(13);
+            tvMsg.setLineSpacing(4f, 1f);
+            cardMsg.addView(tvMsg);
+            root.addView(cardMsg);
+
+            // Buttons Row
+            LinearLayout btnRow = new LinearLayout(this);
+            btnRow.setOrientation(LinearLayout.HORIZONTAL);
+            btnRow.setPadding(0, 24, 0, 0);
+
+            // Explore Packages Button
+            LinearLayout btnExplore = new LinearLayout(this);
+            btnExplore.setOrientation(LinearLayout.HORIZONTAL);
+            btnExplore.setGravity(android.view.Gravity.CENTER);
+            btnExplore.setBackgroundResource(R.drawable.bg_button_selector);
+            btnExplore.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.parseColor("#38BDF8")));
+            btnExplore.setPadding(24, 20, 24, 20);
+            LinearLayout.LayoutParams expLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+            expLp.setMargins(0, 0, 8, 0);
+            btnExplore.setLayoutParams(expLp);
+
+            TextView tvExplore = new TextView(this);
+            tvExplore.setText("Explore Packages");
+            tvExplore.setTextColor(Color.WHITE);
+            tvExplore.setTextSize(14);
+            tvExplore.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+            btnExplore.addView(tvExplore);
+
+            btnExplore.setOnClickListener(v -> {
+                dialog.dismiss();
+                selectTab(1);
+            });
+            btnRow.addView(btnExplore);
+
+            // Cancel Button
+            LinearLayout btnCancel = new LinearLayout(this);
+            btnCancel.setOrientation(LinearLayout.HORIZONTAL);
+            btnCancel.setGravity(android.view.Gravity.CENTER);
+            btnCancel.setBackgroundResource(R.drawable.bg_button_selector);
+            btnCancel.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.parseColor("#334155")));
+            btnCancel.setPadding(24, 20, 24, 20);
+            LinearLayout.LayoutParams canLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+            canLp.setMargins(8, 0, 0, 0);
+            btnCancel.setLayoutParams(canLp);
+
+            TextView tvCancel = new TextView(this);
+            tvCancel.setText("Cancel");
+            tvCancel.setTextColor(Color.WHITE);
+            tvCancel.setTextSize(14);
+            tvCancel.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+            btnCancel.addView(tvCancel);
+
+            btnCancel.setOnClickListener(v -> dialog.dismiss());
+            btnRow.addView(btnCancel);
+
+            root.addView(btnRow);
+
+            dialog.setContentView(root);
+            dialog.show();
+            return;
+        }
+
         BottomSheetDialog dialog = new BottomSheetDialog(this);
 
         LinearLayout root = new LinearLayout(this);
