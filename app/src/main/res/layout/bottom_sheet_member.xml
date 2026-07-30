@@ -86,6 +86,27 @@
         android:paddingHorizontal="16dp"
         android:layout_marginBottom="16dp"/>
 
+    <!-- Password -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Password"
+        android:textColor="@color/text_gray"
+        android:textSize="14sp"
+        android:layout_marginBottom="8dp"/>
+
+    <EditText
+        android:id="@+id/et_member_password"
+        android:layout_width="match_parent"
+        android:layout_height="50dp"
+        android:background="@drawable/bg_input_default"
+        android:hint="••••••••"
+        android:inputType="textPassword"
+        android:textColorHint="@color/text_hint"
+        android:textColor="@color/white"
+        android:paddingHorizontal="16dp"
+        android:layout_marginBottom="16dp"/>
+
     <!-- Membership Package -->
     <TextView
         android:layout_width="wrap_content"

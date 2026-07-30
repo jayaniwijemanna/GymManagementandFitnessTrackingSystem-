@@ -17,6 +17,9 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
+import com.google.firebase.firestore.DocumentReference;
+import com.google.firebase.firestore.DocumentSnapshot;
+import com.google.firebase.firestore.FirebaseFirestore;
 
 import java.util.List;
 
@@ -26,12 +29,15 @@ public class ManagePackagesActivity extends AppCompatActivity {
     private PackageAdapter adapter;
     private LinearLayout layoutEmpty;
     private RecyclerView rvPackages;
+    private FirebaseFirestore db;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         EdgeToEdge.enable(this);
         setContentView(R.layout.activity_manage_packages);
+
+        db = FirebaseFirestore.getInstance();
 
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main), (v, insets) -> {
             Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
@@ -52,12 +58,17 @@ public class ManagePackagesActivity extends AppCompatActivity {
             }
             @Override
             public void onDelete(int position) {
-                String name = packageList.get(position).name;
-                packageList.remove(position);
-                adapter.notifyItemRemoved(position);
-                adapter.notifyItemRangeChanged(position, packageList.size());
-                updateEmptyState();
-                Toast.makeText(ManagePackagesActivity.this, name + " deleted", Toast.LENGTH_SHORT).show();
+                if (position < 0 || position >= packageList.size()) return;
+                GymPackage pkg = packageList.get(position);
+                if (pkg.id != null && !pkg.id.isEmpty()) {
+                    db.collection("packages").document(pkg.id).delete()
+                        .addOnSuccessListener(aVoid -> Toast.makeText(ManagePackagesActivity.this, pkg.name + " deleted from database", Toast.LENGTH_SHORT).show())
+                        .addOnFailureListener(e -> Toast.makeText(ManagePackagesActivity.this, "Error deleting: " + e.getMessage(), Toast.LENGTH_SHORT).show());
+                } else {
+                    packageList.remove(position);
+                    adapter.notifyDataSetChanged();
+                    updateEmptyState();
+                }
             }
         });
 
@@ -67,7 +78,28 @@ public class ManagePackagesActivity extends AppCompatActivity {
         FloatingActionButton fabAdd = findViewById(R.id.fab_add_package);
         fabAdd.setOnClickListener(v -> showAddPackageBottomSheet());
 
-        updateEmptyState();
+        listenToPackagesRealtime();
+    }
+
+    private void listenToPackagesRealtime() {
+        db.collection("packages").addSnapshotListener((value, error) -> {
+            if (error != null) {
+                Toast.makeText(ManagePackagesActivity.this, "Error loading packages: " + error.getMessage(), Toast.LENGTH_SHORT).show();
+                return;
+            }
+            if (value != null) {
+                packageList.clear();
+                for (DocumentSnapshot doc : value.getDocuments()) {
+                    GymPackage pkg = doc.toObject(GymPackage.class);
+                    if (pkg != null) {
+                        pkg.id = doc.getId();
+                        packageList.add(pkg);
+                    }
+                }
+                adapter.notifyDataSetChanged();
+                updateEmptyState();
+            }
+        });
     }
 
     @Override
@@ -100,10 +132,14 @@ public class ManagePackagesActivity extends AppCompatActivity {
             if (name.isEmpty()) { etName.setError("Name is required"); return; }
             String price = etPrice.getText().toString().trim();
             String desc = etDesc.getText().toString().trim();
-            packageList.add(new GymPackage(name, price.isEmpty() ? "0" : price, desc));
-            adapter.notifyItemInserted(packageList.size() - 1);
-            updateEmptyState();
-            Toast.makeText(this, name + " added successfully!", Toast.LENGTH_SHORT).show();
+
+            DocumentReference newDocRef = db.collection("packages").document();
+            GymPackage newPkg = new GymPackage(newDocRef.getId(), name, price.isEmpty() ? "0" : price, desc);
+
+            newDocRef.set(newPkg)
+                .addOnSuccessListener(aVoid -> Toast.makeText(ManagePackagesActivity.this, name + " added successfully!", Toast.LENGTH_SHORT).show())
+                .addOnFailureListener(e -> Toast.makeText(ManagePackagesActivity.this, "Failed to add package: " + e.getMessage(), Toast.LENGTH_SHORT).show());
+
             dialog.dismiss();
         });
 
@@ -112,6 +148,7 @@ public class ManagePackagesActivity extends AppCompatActivity {
     }
 
     private void showEditPackageBottomSheet(int position) {
+        if (position < 0 || position >= packageList.size()) return;
         GymPackage pkg = packageList.get(position);
         BottomSheetDialog dialog = new BottomSheetDialog(this);
         View sheetView = getLayoutInflater().inflate(R.layout.bottom_sheet_package, null);
@@ -133,8 +170,15 @@ public class ManagePackagesActivity extends AppCompatActivity {
             pkg.name = name;
             pkg.price = etPrice.getText().toString().trim();
             pkg.description = etDesc.getText().toString().trim();
-            adapter.notifyItemChanged(position);
-            Toast.makeText(this, "Package updated!", Toast.LENGTH_SHORT).show();
+
+            if (pkg.id != null && !pkg.id.isEmpty()) {
+                db.collection("packages").document(pkg.id).set(pkg)
+                    .addOnSuccessListener(aVoid -> Toast.makeText(ManagePackagesActivity.this, "Package updated!", Toast.LENGTH_SHORT).show())
+                    .addOnFailureListener(e -> Toast.makeText(ManagePackagesActivity.this, "Failed to update package: " + e.getMessage(), Toast.LENGTH_SHORT).show());
+            } else {
+                adapter.notifyItemChanged(position);
+            }
+
             dialog.dismiss();
         });
 

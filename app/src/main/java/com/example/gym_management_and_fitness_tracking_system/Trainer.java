@@ -1,13 +1,18 @@
 package com.example.gym_management_and_fitness_tracking_system;
 
 public class Trainer {
-    public String name;
-    public String specialization;
-    public String phone;
-    public String email;
-    public String password;
+    public String id = "";
+    public String name = "Trainer";
+    public String specialization = "General Fitness";
+    public String phone = "";
+    public String email = "";
+    public String password = "password";
+    public String role = "trainer";
     public java.util.List<String> feedback = new java.util.ArrayList<>();
     public String rating = "5.0";
+
+    // Required empty constructor for Firestore deserialization
+    public Trainer() {}
 
     public Trainer(String name, String specialization, String phone) {
         this.name = name;
@@ -19,6 +24,15 @@ public class Trainer {
     }
 
     public Trainer(String name, String specialization, String phone, String email, String password) {
+        this.name = name;
+        this.specialization = specialization;
+        this.phone = phone;
+        this.email = email;
+        this.password = password;
+    }
+
+    public Trainer(String id, String name, String specialization, String phone, String email, String password) {
+        this.id = id;
         this.name = name;
         this.specialization = specialization;
         this.phone = phone;

@@ -37,8 +37,11 @@ public class TrainerAdapter extends RecyclerView.Adapter<TrainerAdapter.TrainerV
     public void onBindViewHolder(@NonNull TrainerViewHolder holder, int position) {
         Trainer trainer = trainers.get(position);
         holder.tvInitials.setText(trainer.getInitials());
-        holder.tvName.setText(trainer.name);
-        holder.tvSpec.setText(trainer.specialization.isEmpty() ? "General Trainer" : trainer.specialization);
+        holder.tvName.setText(trainer.name != null ? trainer.name : "Trainer");
+        String spec = (trainer.specialization != null && !trainer.specialization.trim().isEmpty())
+                ? trainer.specialization
+                : "General Fitness";
+        holder.tvSpec.setText(spec);
 
         holder.btnEdit.setOnClickListener(v -> listener.onEdit(position));
         holder.btnDelete.setOnClickListener(v -> listener.onDelete(position));

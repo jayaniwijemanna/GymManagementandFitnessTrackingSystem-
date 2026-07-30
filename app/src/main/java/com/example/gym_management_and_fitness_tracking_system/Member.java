@@ -4,11 +4,13 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class Member {
+    public String id;
     public String name;
     public String email;
     public String phone;
     public String plan;
     public String password;
+    public String role = "member";
     public double height = 175.0; // cm
     public double weight = 70.0; // kg
     public String bookedTrainer = "None";
@@ -20,6 +22,13 @@ public class Member {
     public List<String> weightHistory = new ArrayList<>();
     public List<String> notifications = new ArrayList<>();
     public String checkedInTime = "Not Checked In";
+
+    // Empty constructor for Firestore deserialization
+    public Member() {
+        this.notifications.add("Welcome to Titan Gym! Complete your profile.");
+        this.notifications.add("Explore our training packages to get started.");
+        this.weightHistory.add("70.0");
+    }
 
     public Member(String name, String email, String phone, String plan) {
         this.name = name;
@@ -33,6 +42,18 @@ public class Member {
     }
 
     public Member(String name, String email, String phone, String plan, String password) {
+        this.name = name;
+        this.email = email;
+        this.phone = phone;
+        this.plan = plan;
+        this.password = password;
+        this.notifications.add("Welcome to Titan Gym! Complete your profile.");
+        this.notifications.add("Explore our training packages to get started.");
+        this.weightHistory.add("70.0");
+    }
+
+    public Member(String id, String name, String email, String phone, String plan, String password) {
+        this.id = id;
         this.name = name;
         this.email = email;
         this.phone = phone;
