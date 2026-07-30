@@ -1,0 +1,36 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Connecting Bar -->
+    <path
+        android:strokeColor="#0F172A"
+        android:strokeWidth="2.2"
+        android:strokeLineCap="round"
+        android:pathData="M6.5,17.5 L17.5,6.5" />
+    <!-- Bottom-Left Inner Weight Plate -->
+    <path
+        android:strokeColor="#0F172A"
+        android:strokeWidth="3.2"
+        android:strokeLineCap="round"
+        android:pathData="M5.5,14.5 L9.5,18.5" />
+    <!-- Bottom-Left Outer Weight Plate -->
+    <path
+        android:strokeColor="#0F172A"
+        android:strokeWidth="4.5"
+        android:strokeLineCap="round"
+        android:pathData="M3.5,12.5 L10.5,19.5" />
+    <!-- Top-Right Inner Weight Plate -->
+    <path
+        android:strokeColor="#0F172A"
+        android:strokeWidth="3.2"
+        android:strokeLineCap="round"
+        android:pathData="M14.5,5.5 L18.5,9.5" />
+    <!-- Top-Right Outer Weight Plate -->
+    <path
+        android:strokeColor="#0F172A"
+        android:strokeWidth="4.5"
+        android:strokeLineCap="round"
+        android:pathData="M12.5,3.5 L19.5,10.5" />
+</vector>
