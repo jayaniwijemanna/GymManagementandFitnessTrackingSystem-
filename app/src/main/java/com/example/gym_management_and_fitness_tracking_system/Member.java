@@ -21,6 +21,8 @@ public class Member {
     public String workoutPlan = "";
     public String dietPlan = "";
     public int waterIntake = 0;
+    public String waterDate = "";  // date string "day/month/year", used to auto-reset waterIntake on a new day
+
     public List<String> weightHistory = new ArrayList<>();
     public List<String> bookingHistory = new ArrayList<>();
     public List<String> notifications = new ArrayList<>();
