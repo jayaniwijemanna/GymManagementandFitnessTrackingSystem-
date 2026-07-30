@@ -165,6 +165,7 @@ public class ManageMembersActivity extends AppCompatActivity {
         EditText etName = sheetView.findViewById(R.id.et_member_name);
         EditText etEmail = sheetView.findViewById(R.id.et_member_email);
         EditText etPhone = sheetView.findViewById(R.id.et_member_phone);
+        EditText etPass = sheetView.findViewById(R.id.et_member_password);
         Button btnSave = sheetView.findViewById(R.id.btn_save_member);
         LinearLayout chipsContainer = sheetView.findViewById(R.id.package_chips_container);
         TextView tvNoPackagesHint = sheetView.findViewById(R.id.tv_no_packages_hint);
@@ -173,9 +174,10 @@ public class ManageMembersActivity extends AppCompatActivity {
         btnSave.setText(isEdit ? "Update Member" : "Save Member");
 
         if (isEdit && existing != null) {
-            etName.setText(existing.name);
-            etEmail.setText(existing.email);
-            etPhone.setText(existing.phone);
+            etName.setText(existing.name != null ? existing.name : "");
+            etEmail.setText(existing.email != null ? existing.email : "");
+            etPhone.setText(existing.phone != null ? existing.phone : "");
+            etPass.setText(existing.password != null ? existing.password : "");
         }
 
         // Track selected package
@@ -236,12 +238,15 @@ public class ManageMembersActivity extends AppCompatActivity {
             if (name.isEmpty()) { etName.setError("Name is required"); return; }
             String email = etEmail.getText().toString().trim();
             String phone = etPhone.getText().toString().trim();
+            String pass = etPass.getText().toString().trim();
+            if (pass.isEmpty()) pass = "password";
             String plan = selectedPlan[0];
 
             if (isEdit && existing != null) {
                 existing.name = name;
                 existing.email = email;
                 existing.phone = phone;
+                existing.password = pass;
                 existing.plan = plan;
 
                 if (existing.id != null && !existing.id.isEmpty()) {
@@ -254,7 +259,7 @@ public class ManageMembersActivity extends AppCompatActivity {
                 }
             } else {
                 DocumentReference newDoc = db.collection("users").document();
-                Member newMember = new Member(newDoc.getId(), name, email, phone, plan, "password");
+                Member newMember = new Member(newDoc.getId(), name, email, phone, plan, pass);
 
                 newDoc.set(newMember)
                     .addOnSuccessListener(aVoid -> Toast.makeText(ManageMembersActivity.this, name + " added successfully!", Toast.LENGTH_SHORT).show())
