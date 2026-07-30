@@ -755,7 +755,7 @@ public class TrainerDashboardActivity extends AppCompatActivity {
             tvProgressBmi.setText("-");
             tvProgressWater.setText("-");
             tvProgressHeightWeight.setText("Select an assigned member to track progress");
-            tvProgressWeightHistory.setText("");
+            tvProgressWeightHistory.setText("No member selected");
             return;
         }
 
@@ -771,31 +771,142 @@ public class TrainerDashboardActivity extends AppCompatActivity {
             @Override
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
                 Member m = assigned.get(position);
-                double bmi = m.weight / ((m.height / 100.0) * (m.height / 100.0));
-                String cat;
-                if (bmi < 18.5) cat = "Underweight";
-                else if (bmi < 25.0) cat = "Normal";
-                else if (bmi < 30.0) cat = "Overweight";
-                else cat = "Obese";
-
-                tvProgressBmi.setText(String.format(Locale.getDefault(), "%.1f (%s)", bmi, cat));
-                tvProgressWater.setText(m.waterIntake + " Glasses");
-                tvProgressHeightWeight.setText("Height: " + m.height + " cm  |  Weight: " + m.weight + " kg");
-
-                StringBuilder historyBuilder = new StringBuilder();
-                if (m.weightHistory == null || m.weightHistory.isEmpty()) {
-                    historyBuilder.append("No weight logs recorded.");
-                } else {
-                    for (int i = 0; i < m.weightHistory.size(); i++) {
-                        historyBuilder.append("Log #").append(i + 1).append(": ").append(m.weightHistory.get(i)).append(" kg\n");
-                    }
-                }
-                tvProgressWeightHistory.setText(historyBuilder.toString());
+                fetchAndDisplayMemberProgress(m);
             }
 
             @Override
             public void onNothingSelected(AdapterView<?> parent) {}
         });
+    }
+
+    /**
+     * Fetches live member metrics and 'fitness_logs' from Firestore for the selected member.
+     */
+    private void fetchAndDisplayMemberProgress(Member m) {
+        if (m == null) return;
+
+        // Fetch live user doc first to ensure up-to-date height/weight/water
+        if (m.id != null && !m.id.isEmpty()) {
+            db.collection("users").document(m.id).get().addOnSuccessListener(doc -> {
+                if (doc.exists()) {
+                    Member liveMember = doc.toObject(Member.class);
+                    if (liveMember != null) {
+                        liveMember.id = doc.getId();
+                        updateProgressMetricsUI(liveMember);
+                        loadFitnessLogsFromDb(liveMember);
+                        return;
+                    }
+                }
+                updateProgressMetricsUI(m);
+                loadFitnessLogsFromDb(m);
+            }).addOnFailureListener(e -> {
+                updateProgressMetricsUI(m);
+                loadFitnessLogsFromDb(m);
+            });
+        } else {
+            updateProgressMetricsUI(m);
+            loadFitnessLogsFromDb(m);
+        }
+    }
+
+    private void updateProgressMetricsUI(Member m) {
+        double height = m.height > 0 ? m.height : 175.0;
+        double weight = m.weight > 0 ? m.weight : 70.0;
+        double hM = height / 100.0;
+        double bmi = (hM > 0) ? (weight / (hM * hM)) : 0;
+
+        String cat;
+        if (bmi < 18.5) cat = "Underweight";
+        else if (bmi < 25.0) cat = "Normal weight";
+        else if (bmi < 30.0) cat = "Overweight";
+        else cat = "Obese";
+
+        tvProgressBmi.setText(String.format(Locale.getDefault(), "%.1f (%s)", bmi, cat));
+        tvProgressWater.setText(m.waterIntake + " / 8 Glasses");
+        tvProgressHeightWeight.setText("Height: " + String.format(Locale.getDefault(), "%.0f cm", height) +
+                "  |  Weight: " + String.format(Locale.getDefault(), "%.1f kg", weight));
+    }
+
+    private void loadFitnessLogsFromDb(Member m) {
+        if (tvProgressWeightHistory == null) return;
+        tvProgressWeightHistory.setText("Loading live fitness logs from DB...");
+
+        if (m.id != null && !m.id.isEmpty()) {
+            db.collection("fitness_logs")
+                    .whereEqualTo("memberId", m.id)
+                    .get()
+                    .addOnSuccessListener(qs -> displayProgressLogs(qs, m))
+                    .addOnFailureListener(e -> fetchProgressLogsByEmail(m));
+        } else if (m.email != null && !m.email.isEmpty()) {
+            fetchProgressLogsByEmail(m);
+        } else {
+            displayFallbackWeightHistory(m);
+        }
+    }
+
+    private void fetchProgressLogsByEmail(Member m) {
+        if (m.email == null || m.email.isEmpty()) {
+            displayFallbackWeightHistory(m);
+            return;
+        }
+        db.collection("fitness_logs")
+                .whereEqualTo("memberEmail", m.email)
+                .get()
+                .addOnSuccessListener(qs -> displayProgressLogs(qs, m))
+                .addOnFailureListener(e -> displayFallbackWeightHistory(m));
+    }
+
+    private void displayProgressLogs(QuerySnapshot querySnapshot, Member m) {
+        if (querySnapshot == null || querySnapshot.isEmpty()) {
+            displayFallbackWeightHistory(m);
+            return;
+        }
+
+        List<DocumentSnapshot> docs = new ArrayList<>(querySnapshot.getDocuments());
+        java.util.Collections.sort(docs, (d1, d2) -> {
+            com.google.firebase.Timestamp t1 = d1.getTimestamp("timestamp");
+            com.google.firebase.Timestamp t2 = d2.getTimestamp("timestamp");
+            if (t1 != null && t2 != null) return t2.compareTo(t1);
+            return 0;
+        });
+
+        StringBuilder sb = new StringBuilder();
+        int count = 1;
+        for (DocumentSnapshot doc : docs) {
+            String date = doc.getString("date");
+            Double weight = doc.getDouble("weight");
+            Double bmi = doc.getDouble("bmi");
+            String cat = doc.getString("bmiCategory");
+            Double height = doc.getDouble("height");
+
+            sb.append("📅 ").append(date != null ? date : "Log #" + count).append("\n");
+            sb.append("   • Weight: ").append(weight != null ? String.format(Locale.getDefault(), "%.1f kg", weight) : "N/A");
+            if (height != null && height > 0) {
+                sb.append(" (").append(String.format(Locale.getDefault(), "%.0f cm", height)).append(")");
+            }
+            sb.append("\n");
+            sb.append("   • BMI: ").append(bmi != null ? String.format(Locale.getDefault(), "%.1f", bmi) : "N/A");
+            sb.append(" (").append(cat != null ? cat : "Normal").append(")\n\n");
+            count++;
+        }
+
+        if (sb.length() > 0) {
+            tvProgressWeightHistory.setText(sb.toString().trim());
+        } else {
+            displayFallbackWeightHistory(m);
+        }
+    }
+
+    private void displayFallbackWeightHistory(Member m) {
+        StringBuilder sb = new StringBuilder();
+        if (m.weightHistory == null || m.weightHistory.isEmpty()) {
+            sb.append("No weight logs recorded yet.");
+        } else {
+            for (int i = 0; i < m.weightHistory.size(); i++) {
+                sb.append("Log #").append(i + 1).append(": ").append(m.weightHistory.get(i)).append(" kg\n");
+            }
+        }
+        tvProgressWeightHistory.setText(sb.toString().trim());
     }
 
     // ==================== TAB 4: REVIEWS & CHAT ====================
