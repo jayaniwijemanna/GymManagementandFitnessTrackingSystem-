@@ -27,6 +27,7 @@ public class Member {
     public List<String> bookingHistory = new ArrayList<>();
     public List<String> notifications = new ArrayList<>();
     public String checkedInTime = "Not Checked In";
+    public String checkedInDate = ""; // Date of last check in (e.g. "30/7/2026"), used to auto-reset check-in each new day
 
     // Empty constructor for Firestore deserialization
     public Member() {
