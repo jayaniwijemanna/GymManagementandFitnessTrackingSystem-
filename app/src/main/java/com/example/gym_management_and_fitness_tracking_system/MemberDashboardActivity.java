@@ -817,6 +817,22 @@ public class MemberDashboardActivity extends AppCompatActivity {
             btnHomeBuyPlan.setVisibility(View.VISIBLE);
         }
 
+        // Daily Auto-Reset: Reset check-in status on each new day
+        Calendar calCheckin = Calendar.getInstance();
+        int curDay = calCheckin.get(Calendar.DAY_OF_MONTH);
+        int curMonth = calCheckin.get(Calendar.MONTH) + 1;
+        int curYear = calCheckin.get(Calendar.YEAR);
+        String todayDateStr = curDay + "/" + curMonth + "/" + curYear;
+
+        if (currentMember.checkedInDate != null && !currentMember.checkedInDate.isEmpty() && !currentMember.checkedInDate.equals(todayDateStr)) {
+            currentMember.checkedInTime = "Not Checked In";
+            currentMember.checkedInDate = todayDateStr;
+            if (currentMember.id != null && !currentMember.id.isEmpty()) {
+                db.collection("users").document(currentMember.id)
+                        .update("checkedInTime", "Not Checked In", "checkedInDate", todayDateStr);
+            }
+        }
+
         // Check in status
         if (currentMember.checkedInTime == null || currentMember.checkedInTime.equals("Not Checked In")) {
             tvHomeCheckinStatus.setText("Not Checked In Today");
@@ -1073,6 +1089,7 @@ public class MemberDashboardActivity extends AppCompatActivity {
                 }
 
                 currentMember.checkedInTime = checkinTime;
+                currentMember.checkedInDate = dateStr1;
                 String notifMsg = matchedBookingsCount > 0
                         ? "Checked in at " + checkinTime + " • Marked " + matchedBookingsCount + " booking(s) as Attended!"
                         : "Checked in successfully at " + checkinTime;
@@ -1081,8 +1098,10 @@ public class MemberDashboardActivity extends AppCompatActivity {
 
                 // Persist check-in to Firestore users document
                 if (currentMember.id != null && !currentMember.id.isEmpty()) {
-                    db.collection("users").document(currentMember.id)
-                            .update("checkedInTime", checkinTime);
+                    Map<String, Object> memberCheckinUpdates = new HashMap<>();
+                    memberCheckinUpdates.put("checkedInTime", checkinTime);
+                    memberCheckinUpdates.put("checkedInDate", dateStr1);
+                    db.collection("users").document(currentMember.id).update(memberCheckinUpdates);
                 }
 
                 // Write attendance document to Firestore 'attendance' collection
