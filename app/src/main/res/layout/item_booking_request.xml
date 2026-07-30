@@ -193,12 +193,50 @@
         </LinearLayout>
     </LinearLayout>
 
-    <!-- Resolved status label (shown after decision) -->
+    <!-- Approved Actions Row (Mark Session Completed) -->
+    <LinearLayout
+        android:id="@+id/layout_approved_actions"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="end"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:id="@+id/btn_complete_booking"
+            android:layout_width="match_parent"
+            android:layout_height="38dp"
+            android:background="@drawable/bg_button_selector"
+            android:backgroundTint="#2A34C759"
+            android:gravity="center"
+            android:orientation="horizontal"
+            android:clickable="true"
+            android:focusable="true">
+
+            <ImageView
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                android:src="@drawable/ic_check"
+                app:tint="#34C759" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:fontFamily="sans-serif-bold"
+                android:text="Mark Session Completed ✓"
+                android:textColor="#34C759"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- Resolved status label (shown after Completed or Declined) -->
     <TextView
         android:id="@+id/tv_resolved_label"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="2dp"
+        android:layout_marginTop="6dp"
         android:gravity="center"
         android:fontFamily="sans-serif-bold"
         android:text="✓ Approved"

@@ -26,6 +26,7 @@ import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 
+import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.firestore.DocumentSnapshot;
@@ -85,6 +86,7 @@ public class TrainerDashboardActivity extends AppCompatActivity {
     private FirebaseAuth mAuth;
     private ListenerRegistration bookingsListener;
     private ListenerRegistration membersListener;
+    private ListenerRegistration trainerDocListener;
     private final List<Booking> trainerBookings = new ArrayList<>();
 
     @Override
@@ -243,12 +245,74 @@ public class TrainerDashboardActivity extends AppCompatActivity {
      */
     private void onTrainerLoaded() {
         setupHeader();
+        if (currentTrainer != null && currentTrainer.id != null && !currentTrainer.id.isEmpty()) {
+            attachTrainerDocumentListener(currentTrainer.id);
+        }
         listenToMembersRealtime();
         listenToTrainerBookingsRealtime();
         refreshMembersTab();
         setupPlansTab();
         setupProgressTab();
         setupReviewsChatTab();
+    }
+
+    /**
+     * Listens to the current trainer's document in the 'users' collection in real-time.
+     * Updates header initials/name and surfaces incoming notifications to the bell badge.
+     */
+    private void attachTrainerDocumentListener(String trainerId) {
+        if (TextUtils.isEmpty(trainerId)) return;
+        if (trainerDocListener != null) trainerDocListener.remove();
+
+        trainerDocListener = db.collection("users").document(trainerId)
+                .addSnapshotListener((snapshot, error) -> {
+                    if (error != null || snapshot == null || !snapshot.exists()) return;
+                    Trainer t = snapshot.toObject(Trainer.class);
+                    if (t != null) {
+                        t.id = snapshot.getId();
+                        currentTrainer = t;
+                        tvHeaderName.setText(currentTrainer.name);
+                        tvHeaderInitials.setText(currentTrainer.getInitials());
+                        updateTrainerNotificationBadge();
+                    }
+                });
+    }
+
+    private void updateTrainerNotificationBadge() {
+        if (viewNotificationBadge == null) return;
+        if (currentTrainer != null && currentTrainer.notifications != null && !currentTrainer.notifications.isEmpty()) {
+            viewNotificationBadge.setVisibility(View.VISIBLE);
+        } else {
+            viewNotificationBadge.setVisibility(View.GONE);
+        }
+    }
+
+    private void showTrainerNotificationsDialog() {
+        viewNotificationBadge.setVisibility(View.GONE);
+
+        AlertDialog.Builder builder = new AlertDialog.Builder(this, AlertDialog.THEME_HOLO_DARK);
+        builder.setTitle("Trainer Portal Notifications");
+
+        if (currentTrainer == null || currentTrainer.notifications == null || currentTrainer.notifications.isEmpty()) {
+            builder.setMessage("No new notifications.");
+        } else {
+            String[] array = currentTrainer.notifications.toArray(new String[0]);
+            builder.setItems(array, null);
+        }
+
+        builder.setPositiveButton("Clear All", (dialog, which) -> {
+            if (currentTrainer != null && currentTrainer.notifications != null) {
+                currentTrainer.notifications.clear();
+                if (currentTrainer.id != null && !currentTrainer.id.isEmpty()) {
+                    db.collection("users").document(currentTrainer.id)
+                            .update("notifications", new ArrayList<String>());
+                }
+            }
+            updateTrainerNotificationBadge();
+            Toast.makeText(this, "Notifications cleared", Toast.LENGTH_SHORT).show();
+        });
+        builder.setNegativeButton("Close", null);
+        builder.show();
     }
 
     private void listenToTrainerBookingsRealtime() {
@@ -271,6 +335,14 @@ public class TrainerDashboardActivity extends AppCompatActivity {
                         refreshMembersTab();
                     }
                 });
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (bookingsListener != null) bookingsListener.remove();
+        if (membersListener != null) membersListener.remove();
+        if (trainerDocListener != null) trainerDocListener.remove();
     }
 
     private void listenToMembersRealtime() {
@@ -359,6 +431,7 @@ public class TrainerDashboardActivity extends AppCompatActivity {
     private void setupHeader() {
         tvHeaderName.setText(currentTrainer.name);
         tvHeaderInitials.setText(currentTrainer.getInitials());
+        updateTrainerNotificationBadge();
 
         btnLogout.setOnClickListener(v -> {
             Toast.makeText(this, "Logged out securely.", Toast.LENGTH_SHORT).show();
@@ -368,10 +441,7 @@ public class TrainerDashboardActivity extends AppCompatActivity {
             finish();
         });
 
-        btnNotifications.setOnClickListener(v -> {
-            Toast.makeText(this, "No new trainer portal notifications.", Toast.LENGTH_SHORT).show();
-            viewNotificationBadge.setVisibility(View.GONE);
-        });
+        btnNotifications.setOnClickListener(v -> showTrainerNotificationsDialog());
     }
 
     private void setupNavigation() {
@@ -439,7 +509,7 @@ public class TrainerDashboardActivity extends AppCompatActivity {
             if ("Attended".equalsIgnoreCase(s)) continue;
             totalCount++;
             if ("Pending".equalsIgnoreCase(s)) pendingCount++;
-            else if ("Accepted".equalsIgnoreCase(s)) approvedCount++;
+            else if ("Accepted".equalsIgnoreCase(s) || "Approved".equalsIgnoreCase(s)) approvedCount++;
         }
 
         // Update stat views
@@ -481,6 +551,8 @@ public class TrainerDashboardActivity extends AppCompatActivity {
             LinearLayout btnApprove = itemView.findViewById(R.id.btn_approve_booking);
             LinearLayout btnDecline = itemView.findViewById(R.id.btn_decline_booking);
             LinearLayout layoutActions = itemView.findViewById(R.id.layout_action_buttons);
+            LinearLayout layoutApprovedActions = itemView.findViewById(R.id.layout_approved_actions);
+            LinearLayout btnComplete = itemView.findViewById(R.id.btn_complete_booking);
             TextView tvResolved = itemView.findViewById(R.id.tv_resolved_label);
 
             // Initials
@@ -501,54 +573,146 @@ public class TrainerDashboardActivity extends AppCompatActivity {
                     tvStatusBadge.setText("PENDING");
                     tvStatusBadge.getBackground().setTint(Color.parseColor("#FF9500"));
                     layoutActions.setVisibility(View.VISIBLE);
+                    if (layoutApprovedActions != null) layoutApprovedActions.setVisibility(View.GONE);
                     tvResolved.setVisibility(View.GONE);
                     break;
                 case "accepted":
+                case "approved":
                     tvStatusBadge.setText("APPROVED");
                     tvStatusBadge.getBackground().setTint(Color.parseColor("#34C759"));
                     layoutActions.setVisibility(View.GONE);
+                    if (layoutApprovedActions != null) layoutApprovedActions.setVisibility(View.VISIBLE);
                     tvResolved.setVisibility(View.VISIBLE);
-                    tvResolved.setText("✓  Approved — Member has been notified");
+                    tvResolved.setText("✓ Approved — Click below when session is finished");
                     tvResolved.setTextColor(Color.parseColor("#34C759"));
                     break;
+                case "completed":
+                    tvStatusBadge.setText("COMPLETED");
+                    tvStatusBadge.getBackground().setTint(Color.parseColor("#007AFF"));
+                    layoutActions.setVisibility(View.GONE);
+                    if (layoutApprovedActions != null) layoutApprovedActions.setVisibility(View.GONE);
+                    tvResolved.setVisibility(View.VISIBLE);
+                    tvResolved.setText("🎉 Completed — Member can book again");
+                    tvResolved.setTextColor(Color.parseColor("#007AFF"));
+                    break;
                 case "rejected":
+                case "declined":
                     tvStatusBadge.setText("DECLINED");
                     tvStatusBadge.getBackground().setTint(Color.parseColor("#FF3B30"));
                     layoutActions.setVisibility(View.GONE);
+                    if (layoutApprovedActions != null) layoutApprovedActions.setVisibility(View.GONE);
                     tvResolved.setVisibility(View.VISIBLE);
-                    tvResolved.setText("✗  Declined — Member has been notified");
+                    tvResolved.setText("✗ Declined — Member has been notified");
                     tvResolved.setTextColor(Color.parseColor("#FF3B30"));
                     break;
                 default:
                     tvStatusBadge.setText(bStatus.toUpperCase());
                     tvStatusBadge.getBackground().setTint(Color.parseColor("#94A3B8"));
                     layoutActions.setVisibility(View.GONE);
+                    if (layoutApprovedActions != null) layoutApprovedActions.setVisibility(View.GONE);
                     tvResolved.setVisibility(View.GONE);
                     break;
             }
 
             // Approve button
-            btnApprove.setOnClickListener(v -> {
-                new AlertDialog.Builder(this, AlertDialog.THEME_HOLO_DARK)
-                        .setTitle("Approve Booking")
-                        .setMessage("Approve session with " + b.memberName + "\nScheduled: " + b.bookedTime + "?")
-                        .setPositiveButton("Approve", (dialog, which) -> approveBooking(b))
-                        .setNegativeButton("Cancel", null)
-                        .show();
-            });
+            btnApprove.setOnClickListener(v -> showActionConfirmDialog(
+                    "Approve Booking Request",
+                    "Approve session with " + b.memberName + "?\nScheduled for: " + (b.bookedTime != null ? b.bookedTime : "N/A"),
+                    "Approve Session",
+                    Color.parseColor("#34C759"),
+                    () -> approveBooking(b)
+            ));
 
             // Decline button
-            btnDecline.setOnClickListener(v -> {
-                new AlertDialog.Builder(this, AlertDialog.THEME_HOLO_DARK)
-                        .setTitle("Decline Booking")
-                        .setMessage("Decline session with " + b.memberName + "?\nThe member will be notified.")
-                        .setPositiveButton("Decline", (dialog, which) -> declineBooking(b))
-                        .setNegativeButton("Cancel", null)
-                        .show();
-            });
+            btnDecline.setOnClickListener(v -> showActionConfirmDialog(
+                    "Decline Booking Request",
+                    "Decline session request from " + b.memberName + "?\nThe member will be notified immediately.",
+                    "Decline Request",
+                    Color.parseColor("#FF3B30"),
+                    () -> declineBooking(b)
+            ));
+
+            // Complete button (shown when Approved)
+            if (btnComplete != null) {
+                btnComplete.setOnClickListener(v -> showActionConfirmDialog(
+                        "Mark Session Completed",
+                        "Mark session with " + b.memberName + " as COMPLETED?\nThis will allow the member to book a new session.",
+                        "Mark Completed",
+                        Color.parseColor("#34C759"),
+                        () -> completeBooking(b)
+                ));
+            }
 
             layoutMembersList.addView(itemView);
         }
+    }
+
+    /**
+     * Custom dark BottomSheet confirmation dialog matching Titan Gym theme design.
+     */
+    private void showActionConfirmDialog(String title, String message, String confirmBtnText, int accentColor, Runnable onConfirm) {
+        BottomSheetDialog dialog = new BottomSheetDialog(this);
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setPadding(40, 24, 40, 36);
+        root.setBackgroundResource(R.drawable.bg_bottom_sheet);
+
+        // Handle bar
+        View handle = new View(this);
+        LinearLayout.LayoutParams handleLp = new LinearLayout.LayoutParams(100, 10);
+        handleLp.gravity = android.view.Gravity.CENTER_HORIZONTAL;
+        handleLp.setMargins(0, 0, 0, 24);
+        handle.setLayoutParams(handleLp);
+        handle.setBackgroundResource(R.drawable.bg_input_default);
+        root.addView(handle);
+
+        // Title
+        TextView tvTitle = new TextView(this);
+        tvTitle.setText(title);
+        tvTitle.setTextColor(Color.WHITE);
+        tvTitle.setTextSize(18);
+        tvTitle.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        tvTitle.setPadding(0, 0, 0, 12);
+        root.addView(tvTitle);
+
+        // Message
+        TextView tvMsg = new TextView(this);
+        tvMsg.setText(message);
+        tvMsg.setTextColor(Color.parseColor("#94A3B8"));
+        tvMsg.setTextSize(14);
+        tvMsg.setPadding(0, 0, 0, 24);
+        root.addView(tvMsg);
+
+        // Buttons Row
+        LinearLayout btnRow = new LinearLayout(this);
+        btnRow.setOrientation(LinearLayout.HORIZONTAL);
+
+        android.widget.Button btnCancel = new android.widget.Button(this);
+        LinearLayout.LayoutParams cancelLp = new LinearLayout.LayoutParams(0, spToPx(44), 1.0f);
+        cancelLp.setMargins(0, 0, 12, 0);
+        btnCancel.setLayoutParams(cancelLp);
+        btnCancel.setText("Cancel");
+        btnCancel.setTextColor(Color.parseColor("#94A3B8"));
+        btnCancel.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.parseColor("#1E293B")));
+        btnCancel.setOnClickListener(v -> dialog.dismiss());
+        btnRow.addView(btnCancel);
+
+        android.widget.Button btnConfirm = new android.widget.Button(this);
+        LinearLayout.LayoutParams confirmLp = new LinearLayout.LayoutParams(0, spToPx(44), 1.0f);
+        btnConfirm.setLayoutParams(confirmLp);
+        btnConfirm.setText(confirmBtnText);
+        btnConfirm.setTextColor(Color.WHITE);
+        btnConfirm.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        btnConfirm.setBackgroundTintList(android.content.res.ColorStateList.valueOf(accentColor));
+        btnConfirm.setOnClickListener(v -> {
+            dialog.dismiss();
+            onConfirm.run();
+        });
+        btnRow.addView(btnConfirm);
+
+        root.addView(btnRow);
+        dialog.setContentView(root);
+        dialog.show();
     }
 
     /** Approve a booking: update Firestore + push notification to member **/
@@ -571,12 +735,42 @@ public class TrainerDashboardActivity extends AppCompatActivity {
             updates.put("bookedTrainer", currentTrainer.name);
             db.collection("users").document(b.memberId).update(updates);
 
-            // Push a notification document into Firestore for the member to receive
             pushNotificationToMember(
                     b.memberId,
                     b.memberName,
                     "📅 Booking Approved!",
                     "Your training session with " + currentTrainer.name + " on " + b.bookedTime + " has been APPROVED. See you at the gym!"
+            );
+        }
+
+        refreshMembersTab();
+    }
+
+    /** Complete a booking: update Firestore + notify member + allow rebooking **/
+    private void completeBooking(Booking b) {
+        b.status = "Completed";
+
+        // Update bookings collection
+        if (b.id != null && !b.id.isEmpty()) {
+            db.collection("bookings").document(b.id).update("status", "Completed")
+                    .addOnSuccessListener(aVoid -> {
+                        Toast.makeText(this, "🎉 Marked session Completed for " + b.memberName, Toast.LENGTH_SHORT).show();
+                    })
+                    .addOnFailureListener(e -> Toast.makeText(this, "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show());
+        }
+
+        // Update member's user document in Firestore to reset booking status so member can book again
+        if (b.memberId != null && !b.memberId.isEmpty()) {
+            Map<String, Object> updates = new HashMap<>();
+            updates.put("bookingStatus", "Completed");
+            updates.put("bookedTrainer", "None");
+            db.collection("users").document(b.memberId).update(updates);
+
+            pushNotificationToMember(
+                    b.memberId,
+                    b.memberName,
+                    "🎉 Session Completed!",
+                    "Your training session with " + currentTrainer.name + " on " + b.bookedTime + " is COMPLETED. You can now book your next session!"
             );
         }
 
@@ -755,7 +949,7 @@ public class TrainerDashboardActivity extends AppCompatActivity {
             tvProgressBmi.setText("-");
             tvProgressWater.setText("-");
             tvProgressHeightWeight.setText("Select an assigned member to track progress");
-            tvProgressWeightHistory.setText("");
+            tvProgressWeightHistory.setText("No member selected");
             return;
         }
 
@@ -771,31 +965,142 @@ public class TrainerDashboardActivity extends AppCompatActivity {
             @Override
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
                 Member m = assigned.get(position);
-                double bmi = m.weight / ((m.height / 100.0) * (m.height / 100.0));
-                String cat;
-                if (bmi < 18.5) cat = "Underweight";
-                else if (bmi < 25.0) cat = "Normal";
-                else if (bmi < 30.0) cat = "Overweight";
-                else cat = "Obese";
-
-                tvProgressBmi.setText(String.format(Locale.getDefault(), "%.1f (%s)", bmi, cat));
-                tvProgressWater.setText(m.waterIntake + " Glasses");
-                tvProgressHeightWeight.setText("Height: " + m.height + " cm  |  Weight: " + m.weight + " kg");
-
-                StringBuilder historyBuilder = new StringBuilder();
-                if (m.weightHistory == null || m.weightHistory.isEmpty()) {
-                    historyBuilder.append("No weight logs recorded.");
-                } else {
-                    for (int i = 0; i < m.weightHistory.size(); i++) {
-                        historyBuilder.append("Log #").append(i + 1).append(": ").append(m.weightHistory.get(i)).append(" kg\n");
-                    }
-                }
-                tvProgressWeightHistory.setText(historyBuilder.toString());
+                fetchAndDisplayMemberProgress(m);
             }
 
             @Override
             public void onNothingSelected(AdapterView<?> parent) {}
         });
+    }
+
+    /**
+     * Fetches live member metrics and 'fitness_logs' from Firestore for the selected member.
+     */
+    private void fetchAndDisplayMemberProgress(Member m) {
+        if (m == null) return;
+
+        // Fetch live user doc first to ensure up-to-date height/weight/water
+        if (m.id != null && !m.id.isEmpty()) {
+            db.collection("users").document(m.id).get().addOnSuccessListener(doc -> {
+                if (doc.exists()) {
+                    Member liveMember = doc.toObject(Member.class);
+                    if (liveMember != null) {
+                        liveMember.id = doc.getId();
+                        updateProgressMetricsUI(liveMember);
+                        loadFitnessLogsFromDb(liveMember);
+                        return;
+                    }
+                }
+                updateProgressMetricsUI(m);
+                loadFitnessLogsFromDb(m);
+            }).addOnFailureListener(e -> {
+                updateProgressMetricsUI(m);
+                loadFitnessLogsFromDb(m);
+            });
+        } else {
+            updateProgressMetricsUI(m);
+            loadFitnessLogsFromDb(m);
+        }
+    }
+
+    private void updateProgressMetricsUI(Member m) {
+        double height = m.height > 0 ? m.height : 175.0;
+        double weight = m.weight > 0 ? m.weight : 70.0;
+        double hM = height / 100.0;
+        double bmi = (hM > 0) ? (weight / (hM * hM)) : 0;
+
+        String cat;
+        if (bmi < 18.5) cat = "Underweight";
+        else if (bmi < 25.0) cat = "Normal weight";
+        else if (bmi < 30.0) cat = "Overweight";
+        else cat = "Obese";
+
+        tvProgressBmi.setText(String.format(Locale.getDefault(), "%.1f (%s)", bmi, cat));
+        tvProgressWater.setText(m.waterIntake + " / 8 Glasses");
+        tvProgressHeightWeight.setText("Height: " + String.format(Locale.getDefault(), "%.0f cm", height) +
+                "  |  Weight: " + String.format(Locale.getDefault(), "%.1f kg", weight));
+    }
+
+    private void loadFitnessLogsFromDb(Member m) {
+        if (tvProgressWeightHistory == null) return;
+        tvProgressWeightHistory.setText("Loading live fitness logs from DB...");
+
+        if (m.id != null && !m.id.isEmpty()) {
+            db.collection("fitness_logs")
+                    .whereEqualTo("memberId", m.id)
+                    .get()
+                    .addOnSuccessListener(qs -> displayProgressLogs(qs, m))
+                    .addOnFailureListener(e -> fetchProgressLogsByEmail(m));
+        } else if (m.email != null && !m.email.isEmpty()) {
+            fetchProgressLogsByEmail(m);
+        } else {
+            displayFallbackWeightHistory(m);
+        }
+    }
+
+    private void fetchProgressLogsByEmail(Member m) {
+        if (m.email == null || m.email.isEmpty()) {
+            displayFallbackWeightHistory(m);
+            return;
+        }
+        db.collection("fitness_logs")
+                .whereEqualTo("memberEmail", m.email)
+                .get()
+                .addOnSuccessListener(qs -> displayProgressLogs(qs, m))
+                .addOnFailureListener(e -> displayFallbackWeightHistory(m));
+    }
+
+    private void displayProgressLogs(QuerySnapshot querySnapshot, Member m) {
+        if (querySnapshot == null || querySnapshot.isEmpty()) {
+            displayFallbackWeightHistory(m);
+            return;
+        }
+
+        List<DocumentSnapshot> docs = new ArrayList<>(querySnapshot.getDocuments());
+        java.util.Collections.sort(docs, (d1, d2) -> {
+            com.google.firebase.Timestamp t1 = d1.getTimestamp("timestamp");
+            com.google.firebase.Timestamp t2 = d2.getTimestamp("timestamp");
+            if (t1 != null && t2 != null) return t2.compareTo(t1);
+            return 0;
+        });
+
+        StringBuilder sb = new StringBuilder();
+        int count = 1;
+        for (DocumentSnapshot doc : docs) {
+            String date = doc.getString("date");
+            Double weight = doc.getDouble("weight");
+            Double bmi = doc.getDouble("bmi");
+            String cat = doc.getString("bmiCategory");
+            Double height = doc.getDouble("height");
+
+            sb.append("📅 ").append(date != null ? date : "Log #" + count).append("\n");
+            sb.append("   • Weight: ").append(weight != null ? String.format(Locale.getDefault(), "%.1f kg", weight) : "N/A");
+            if (height != null && height > 0) {
+                sb.append(" (").append(String.format(Locale.getDefault(), "%.0f cm", height)).append(")");
+            }
+            sb.append("\n");
+            sb.append("   • BMI: ").append(bmi != null ? String.format(Locale.getDefault(), "%.1f", bmi) : "N/A");
+            sb.append(" (").append(cat != null ? cat : "Normal").append(")\n\n");
+            count++;
+        }
+
+        if (sb.length() > 0) {
+            tvProgressWeightHistory.setText(sb.toString().trim());
+        } else {
+            displayFallbackWeightHistory(m);
+        }
+    }
+
+    private void displayFallbackWeightHistory(Member m) {
+        StringBuilder sb = new StringBuilder();
+        if (m.weightHistory == null || m.weightHistory.isEmpty()) {
+            sb.append("No weight logs recorded yet.");
+        } else {
+            for (int i = 0; i < m.weightHistory.size(); i++) {
+                sb.append("Log #").append(i + 1).append(": ").append(m.weightHistory.get(i)).append(" kg\n");
+            }
+        }
+        tvProgressWeightHistory.setText(sb.toString().trim());
     }
 
     // ==================== TAB 4: REVIEWS & CHAT ====================
