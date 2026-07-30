@@ -49,6 +49,10 @@ public class AdminDashboardActivity extends AppCompatActivity {
             startActivity(new Intent(this, SendNotificationsActivity.class));
         });
 
+        findViewById(R.id.action_pending_requests).setOnClickListener(v -> {
+            startActivity(new Intent(this, PendingPlanRequestsActivity.class));
+        });
+
         findViewById(R.id.action_reports).setOnClickListener(v -> {
             startActivity(new Intent(this, GenerateReportsActivity.class));
         });
