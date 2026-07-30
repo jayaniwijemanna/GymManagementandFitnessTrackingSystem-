@@ -103,10 +103,11 @@ public class MemberDashboardActivity extends AppCompatActivity {
 
     // Fitness Tab elements
     private EditText etBmiHeight, etBmiWeight;
-    private LinearLayout btnCalculateBmi;
+    private LinearLayout btnCalculateBmi, layoutBmiHistoryCards;
     private FrameLayout btnWaterMinus, btnWaterPlus;
     private LinearLayout layoutBmiResult;
-    private TextView tvBmiScore, tvBmiCategory, tvWeightHistoryList, tvWaterCount;
+    private TextView tvBmiScore, tvBmiCategory, tvBmiHistoryEmpty, tvWaterCount;
+    private TextView tvFitnessDietPlan, tvFitnessWorkoutPlan;
 
     // Feedback Tab elements
     private Spinner spinnerFeedbackTrainer;
@@ -400,6 +401,7 @@ public class MemberDashboardActivity extends AppCompatActivity {
                         refreshHomeTab();
                         setupProgramsTab();
                         setupBookingsTab();
+                        setupFeedbackTab();
                     }
                 });
     }
@@ -480,7 +482,10 @@ public class MemberDashboardActivity extends AppCompatActivity {
         layoutBmiResult = findViewById(R.id.layout_bmi_result);
         tvBmiScore = findViewById(R.id.tv_bmi_score);
         tvBmiCategory = findViewById(R.id.tv_bmi_category);
-        tvWeightHistoryList = findViewById(R.id.tv_weight_history_list);
+        layoutBmiHistoryCards = findViewById(R.id.layout_bmi_history_cards);
+        tvBmiHistoryEmpty = findViewById(R.id.tv_bmi_history_empty);
+        tvFitnessDietPlan = findViewById(R.id.tv_fitness_diet_plan);
+        tvFitnessWorkoutPlan = findViewById(R.id.tv_fitness_workout_plan);
         tvWaterCount = findViewById(R.id.tv_water_count);
         btnWaterMinus = findViewById(R.id.btn_water_minus);
         btnWaterPlus = findViewById(R.id.btn_water_plus);
@@ -535,17 +540,81 @@ public class MemberDashboardActivity extends AppCompatActivity {
         // Clear badge
         viewNotificationBadge.setVisibility(View.GONE);
 
-        AlertDialog.Builder builder = new AlertDialog.Builder(this, AlertDialog.THEME_HOLO_DARK);
-        builder.setTitle("Notifications Alert");
+        BottomSheetDialog dialog = new BottomSheetDialog(this);
 
-        if (currentMember == null || currentMember.notifications.isEmpty()) {
-            builder.setMessage("No new notifications.");
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setPadding(40, 24, 40, 36);
+        root.setBackgroundResource(R.drawable.bg_bottom_sheet);
+
+        // Handle bar
+        View handle = new View(this);
+        LinearLayout.LayoutParams handleLp = new LinearLayout.LayoutParams(100, 10);
+        handleLp.gravity = android.view.Gravity.CENTER_HORIZONTAL;
+        handleLp.setMargins(0, 0, 0, 24);
+        handle.setLayoutParams(handleLp);
+        handle.setBackgroundResource(R.drawable.bg_input_default);
+        root.addView(handle);
+
+        // Header Title
+        TextView tvTitle = new TextView(this);
+        tvTitle.setText("🔔 NOTIFICATIONS");
+        tvTitle.setTextColor(Color.WHITE);
+        tvTitle.setTextSize(18);
+        tvTitle.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        tvTitle.setPadding(0, 0, 0, 16);
+        root.addView(tvTitle);
+
+        // Notifications content container
+        LinearLayout contentLayout = new LinearLayout(this);
+        contentLayout.setOrientation(LinearLayout.VERTICAL);
+        contentLayout.setBackgroundResource(R.drawable.bg_action_card);
+        contentLayout.setPadding(24, 20, 24, 20);
+
+        if (currentMember == null || currentMember.notifications == null || currentMember.notifications.isEmpty()) {
+            TextView tvEmpty = new TextView(this);
+            tvEmpty.setText("No new notifications.");
+            tvEmpty.setTextColor(Color.parseColor("#94A3B8"));
+            tvEmpty.setTextSize(13);
+            contentLayout.addView(tvEmpty);
         } else {
-            String[] array = currentMember.notifications.toArray(new String[0]);
-            builder.setItems(array, null);
+            for (int i = currentMember.notifications.size() - 1; i >= 0; i--) {
+                String notifText = currentMember.notifications.get(i);
+                TextView tvItem = new TextView(this);
+                tvItem.setText("• " + notifText);
+                tvItem.setTextColor(Color.parseColor("#E2E8F0"));
+                tvItem.setTextSize(13);
+                tvItem.setPadding(0, 8, 0, 8);
+                contentLayout.addView(tvItem);
+            }
         }
+        root.addView(contentLayout);
 
-        builder.setPositiveButton("Clear All", (dialog, which) -> {
+        // Action Buttons Row
+        LinearLayout btnRow = new LinearLayout(this);
+        btnRow.setOrientation(LinearLayout.HORIZONTAL);
+        btnRow.setPadding(0, 24, 0, 0);
+
+        // Clear All Button
+        LinearLayout btnClear = new LinearLayout(this);
+        btnClear.setOrientation(LinearLayout.HORIZONTAL);
+        btnClear.setGravity(android.view.Gravity.CENTER);
+        btnClear.setBackgroundResource(R.drawable.bg_button_selector);
+        btnClear.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.parseColor("#DC2626")));
+        btnClear.setPadding(24, 20, 24, 20);
+        LinearLayout.LayoutParams clearLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        clearLp.setMargins(0, 0, 8, 0);
+        btnClear.setLayoutParams(clearLp);
+
+        TextView tvClear = new TextView(this);
+        tvClear.setText("Clear All");
+        tvClear.setTextColor(Color.WHITE);
+        tvClear.setTextSize(14);
+        tvClear.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        btnClear.addView(tvClear);
+
+        btnClear.setOnClickListener(v -> {
+            dialog.dismiss();
             if (currentMember != null) {
                 currentMember.notifications.clear();
                 if (currentMember.id != null && !currentMember.id.isEmpty()) {
@@ -556,8 +625,33 @@ public class MemberDashboardActivity extends AppCompatActivity {
             updateNotificationBadge();
             Toast.makeText(this, "Notifications cleared", Toast.LENGTH_SHORT).show();
         });
-        builder.setNegativeButton("Close", null);
-        builder.show();
+        btnRow.addView(btnClear);
+
+        // Close Button
+        LinearLayout btnClose = new LinearLayout(this);
+        btnClose.setOrientation(LinearLayout.HORIZONTAL);
+        btnClose.setGravity(android.view.Gravity.CENTER);
+        btnClose.setBackgroundResource(R.drawable.bg_button_selector);
+        btnClose.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.parseColor("#334155")));
+        btnClose.setPadding(24, 20, 24, 20);
+        LinearLayout.LayoutParams closeLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        closeLp.setMargins(8, 0, 0, 0);
+        btnClose.setLayoutParams(closeLp);
+
+        TextView tvClose = new TextView(this);
+        tvClose.setText("Close");
+        tvClose.setTextColor(Color.WHITE);
+        tvClose.setTextSize(14);
+        tvClose.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        btnClose.addView(tvClose);
+
+        btnClose.setOnClickListener(v -> dialog.dismiss());
+        btnRow.addView(btnClose);
+
+        root.addView(btnRow);
+
+        dialog.setContentView(root);
+        dialog.show();
     }
 
     // Swapping content screens
@@ -1164,11 +1258,15 @@ public class MemberDashboardActivity extends AppCompatActivity {
                 TextView tvInitials = trnView.findViewById(R.id.tv_trn_initials);
                 TextView tvName = trnView.findViewById(R.id.tv_trn_name);
                 TextView tvSpec = trnView.findViewById(R.id.tv_trn_spec);
+                TextView tvRating = trnView.findViewById(R.id.tv_trn_rating);
                 TextView btnBook = trnView.findViewById(R.id.btn_trn_book);
 
                 tvInitials.setText(t.getInitials());
                 tvName.setText(t.name);
                 tvSpec.setText(t.specialization);
+                if (tvRating != null) {
+                    tvRating.setText(t.getFormattedRating());
+                }
 
                 // Show 'Booked' state if this trainer is currently booked
                 boolean isBookedThisTrainer = false;
@@ -1453,6 +1551,111 @@ public class MemberDashboardActivity extends AppCompatActivity {
      * Uses the Titan Gym dark theme bottom sheet format.
      */
     private void showBookingDialog(Trainer trainer) {
+        // Enforce active membership plan validation
+        boolean hasActivePlan = currentMember != null
+                && currentMember.plan != null
+                && !currentMember.plan.trim().isEmpty()
+                && !"None".equalsIgnoreCase(currentMember.plan)
+                && !"No Package".equalsIgnoreCase(currentMember.plan)
+                && "Active".equalsIgnoreCase(currentMember.planStatus);
+
+        if (!hasActivePlan) {
+            BottomSheetDialog dialog = new BottomSheetDialog(this);
+
+            LinearLayout root = new LinearLayout(this);
+            root.setOrientation(LinearLayout.VERTICAL);
+            root.setPadding(40, 24, 40, 36);
+            root.setBackgroundResource(R.drawable.bg_bottom_sheet);
+
+            // Handle bar
+            View handle = new View(this);
+            LinearLayout.LayoutParams handleLp = new LinearLayout.LayoutParams(100, 10);
+            handleLp.gravity = android.view.Gravity.CENTER_HORIZONTAL;
+            handleLp.setMargins(0, 0, 0, 24);
+            handle.setLayoutParams(handleLp);
+            handle.setBackgroundResource(R.drawable.bg_input_default);
+            root.addView(handle);
+
+            // Header Title
+            TextView tvTitle = new TextView(this);
+            tvTitle.setText("⚠️ MEMBERSHIP INACTIVE");
+            tvTitle.setTextColor(Color.parseColor("#FF9500"));
+            tvTitle.setTextSize(18);
+            tvTitle.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+            tvTitle.setPadding(0, 0, 0, 16);
+            root.addView(tvTitle);
+
+            // Card Message
+            LinearLayout cardMsg = new LinearLayout(this);
+            cardMsg.setOrientation(LinearLayout.VERTICAL);
+            cardMsg.setBackgroundResource(R.drawable.bg_action_card);
+            cardMsg.setPadding(24, 20, 24, 20);
+
+            TextView tvMsg = new TextView(this);
+            tvMsg.setText("Your gym membership plan is not active. You must have an active membership package to book a personal trainer.");
+            tvMsg.setTextColor(Color.parseColor("#E2E8F0"));
+            tvMsg.setTextSize(13);
+            tvMsg.setLineSpacing(4f, 1f);
+            cardMsg.addView(tvMsg);
+            root.addView(cardMsg);
+
+            // Buttons Row
+            LinearLayout btnRow = new LinearLayout(this);
+            btnRow.setOrientation(LinearLayout.HORIZONTAL);
+            btnRow.setPadding(0, 24, 0, 0);
+
+            // Explore Packages Button
+            LinearLayout btnExplore = new LinearLayout(this);
+            btnExplore.setOrientation(LinearLayout.HORIZONTAL);
+            btnExplore.setGravity(android.view.Gravity.CENTER);
+            btnExplore.setBackgroundResource(R.drawable.bg_button_selector);
+            btnExplore.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.parseColor("#38BDF8")));
+            btnExplore.setPadding(24, 20, 24, 20);
+            LinearLayout.LayoutParams expLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+            expLp.setMargins(0, 0, 8, 0);
+            btnExplore.setLayoutParams(expLp);
+
+            TextView tvExplore = new TextView(this);
+            tvExplore.setText("Explore Packages");
+            tvExplore.setTextColor(Color.WHITE);
+            tvExplore.setTextSize(14);
+            tvExplore.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+            btnExplore.addView(tvExplore);
+
+            btnExplore.setOnClickListener(v -> {
+                dialog.dismiss();
+                selectTab(1);
+            });
+            btnRow.addView(btnExplore);
+
+            // Cancel Button
+            LinearLayout btnCancel = new LinearLayout(this);
+            btnCancel.setOrientation(LinearLayout.HORIZONTAL);
+            btnCancel.setGravity(android.view.Gravity.CENTER);
+            btnCancel.setBackgroundResource(R.drawable.bg_button_selector);
+            btnCancel.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.parseColor("#334155")));
+            btnCancel.setPadding(24, 20, 24, 20);
+            LinearLayout.LayoutParams canLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+            canLp.setMargins(8, 0, 0, 0);
+            btnCancel.setLayoutParams(canLp);
+
+            TextView tvCancel = new TextView(this);
+            tvCancel.setText("Cancel");
+            tvCancel.setTextColor(Color.WHITE);
+            tvCancel.setTextSize(14);
+            tvCancel.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+            btnCancel.addView(tvCancel);
+
+            btnCancel.setOnClickListener(v -> dialog.dismiss());
+            btnRow.addView(btnCancel);
+
+            root.addView(btnRow);
+
+            dialog.setContentView(root);
+            dialog.show();
+            return;
+        }
+
         BottomSheetDialog dialog = new BottomSheetDialog(this);
 
         LinearLayout root = new LinearLayout(this);
@@ -1680,26 +1883,173 @@ public class MemberDashboardActivity extends AppCompatActivity {
     // ==================== TAB 3: FITNESS TRACKING ====================
     private void refreshFitnessTab() {
         if (currentMember == null) return;
-        tvWaterCount.setText(currentMember.waterIntake + " / 8 glasses");
 
-        // Format and render weight log history
-        StringBuilder sb = new StringBuilder();
-        if (currentMember.weightHistory == null || currentMember.weightHistory.isEmpty()) {
-            sb.append("• No weights logged yet. Input values above to log progress.");
-        } else {
-            for (int i = currentMember.weightHistory.size() - 1; i >= 0; i--) {
-                sb.append("• Log #").append(i + 1).append(": ").append(currentMember.weightHistory.get(i)).append(" kg\n");
+        // --- 1. Auto-reset water count on a new day ---
+        Calendar cal = Calendar.getInstance();
+        int day = cal.get(Calendar.DAY_OF_MONTH);
+        int month = cal.get(Calendar.MONTH) + 1;
+        int year = cal.get(Calendar.YEAR);
+        String todayStr = day + "/" + month + "/" + year;
+
+        String savedWaterDate = currentMember.waterDate != null ? currentMember.waterDate : "";
+        if (!savedWaterDate.equals(todayStr)) {
+            // New day — reset water intake
+            currentMember.waterIntake = 0;
+            currentMember.waterDate = todayStr;
+            if (currentMember.id != null && !currentMember.id.isEmpty()) {
+                Map<String, Object> waterReset = new HashMap<>();
+                waterReset.put("waterIntake", 0);
+                waterReset.put("waterDate", todayStr);
+                db.collection("users").document(currentMember.id).update(waterReset);
             }
         }
-        tvWeightHistoryList.setText(sb.toString().trim());
+        tvWaterCount.setText(currentMember.waterIntake + " / 8 glasses");
 
-        // Prepopulate current fields if saved
-        if (currentMember.height > 0) {
-            etBmiHeight.setText(String.valueOf(currentMember.height));
-        }
-        if (currentMember.weight > 0) {
-            etBmiWeight.setText(String.valueOf(currentMember.weight));
-        }
+        // --- 2. Pre-populate height/weight fields ---
+        if (currentMember.height > 0) etBmiHeight.setText(String.valueOf(currentMember.height));
+        if (currentMember.weight > 0) etBmiWeight.setText(String.valueOf(currentMember.weight));
+
+        // --- 3. Display trainer-assigned diet/workout plans ---
+        String diet = (currentMember.dietPlan != null && !currentMember.dietPlan.isEmpty())
+                ? currentMember.dietPlan
+                : getBmiBasedDietPlan();
+        String workout = (currentMember.workoutPlan != null && !currentMember.workoutPlan.isEmpty())
+                ? currentMember.workoutPlan
+                : getBmiBasedWorkoutPlan();
+
+        tvFitnessDietPlan.setText(diet);
+        tvFitnessWorkoutPlan.setText(workout);
+
+        // --- 4. Load BMI history from Firestore fitness_logs ---
+        if (currentMember.id == null || currentMember.id.isEmpty()) return;
+        db.collection("fitness_logs")
+                .whereEqualTo("memberId", currentMember.id)
+                .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING)
+                .limit(10)
+                .get()
+                .addOnSuccessListener(snapshots -> {
+                    if (isFinishing() || isDestroyed()) return;
+                    layoutBmiHistoryCards.removeAllViews();
+                    if (snapshots == null || snapshots.isEmpty()) {
+                        TextView tvEmpty = new TextView(this);
+                        tvEmpty.setText("No BMI logs yet. Calculate above to start tracking.");
+                        tvEmpty.setTextColor(Color.parseColor("#94A3B8"));
+                        tvEmpty.setTextSize(12);
+                        layoutBmiHistoryCards.addView(tvEmpty);
+                        return;
+                    }
+                    for (com.google.firebase.firestore.DocumentSnapshot doc : snapshots.getDocuments()) {
+                        String logDate = doc.getString("date");
+                        Double logBmi = doc.getDouble("bmi");
+                        String logCat = doc.getString("bmiCategory");
+                        Double logWeight = doc.getDouble("weight");
+                        Double logHeight = doc.getDouble("height");
+                        if (logDate == null || logBmi == null) continue;
+
+                        // Build a row card for each log entry
+                        LinearLayout row = new LinearLayout(this);
+                        row.setOrientation(LinearLayout.VERTICAL);
+                        row.setBackground(androidx.core.content.ContextCompat.getDrawable(this, R.drawable.bg_action_card));
+                        LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(
+                                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                        rowLp.setMargins(0, 0, 0, 16);
+                        row.setLayoutParams(rowLp);
+                        row.setPadding(24, 16, 24, 16);
+
+                        TextView tvDate = new TextView(this);
+                        tvDate.setText("📅 " + logDate);
+                        tvDate.setTextColor(Color.parseColor("#94A3B8"));
+                        tvDate.setTextSize(11);
+                        row.addView(tvDate);
+
+                        TextView tvBmiRow = new TextView(this);
+                        String bmiDisplay = String.format(Locale.getDefault(), "BMI: %.1f  •  %s", logBmi, logCat != null ? logCat : "");
+                        tvBmiRow.setText(bmiDisplay);
+                        tvBmiRow.setTextColor(Color.WHITE);
+                        tvBmiRow.setTextSize(14);
+                        tvBmiRow.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+                        row.addView(tvBmiRow);
+
+                        if (logWeight != null && logHeight != null) {
+                            TextView tvStats = new TextView(this);
+                            tvStats.setText(String.format(Locale.getDefault(), "%.1f kg  •  %.0f cm", logWeight, logHeight));
+                            tvStats.setTextColor(Color.parseColor("#64748B"));
+                            tvStats.setTextSize(12);
+                            row.addView(tvStats);
+                        }
+
+                        layoutBmiHistoryCards.addView(row);
+                    }
+                })
+                .addOnFailureListener(e -> {
+                    if (isFinishing() || isDestroyed()) return;
+                    layoutBmiHistoryCards.removeAllViews();
+                    TextView tvEmpty = new TextView(this);
+                    tvEmpty.setText("No BMI logs found.");
+                    tvEmpty.setTextColor(Color.parseColor("#94A3B8"));
+                    tvEmpty.setTextSize(12);
+                    layoutBmiHistoryCards.addView(tvEmpty);
+                });
+    }
+
+    /** Returns a BMI-based recommended diet plan if no trainer plan is assigned. */
+    private String getBmiBasedDietPlan() {
+        if (currentMember == null || currentMember.weight <= 0 || currentMember.height <= 0)
+            return "No diet plan assigned yet. Contact your trainer.";
+        double hM = currentMember.height / 100.0;
+        double bmi = currentMember.weight / (hM * hM);
+        if (bmi < 18.5)
+            return "🥣 High-Calorie Plan (BMI-based):\n" +
+                   "• Breakfast: Oatmeal + banana + peanut butter + whole milk\n" +
+                   "• Lunch: Rice + chicken + lentils + olive oil\n" +
+                   "• Snack: Nuts, cheese, dried fruit\n" +
+                   "• Dinner: Pasta + salmon + avocado\nGoal: caloric surplus (+500 kcal/day)";
+        else if (bmi < 24.9)
+            return "🥗 Balanced Maintenance Plan (BMI-based):\n" +
+                   "• Breakfast: Oats + protein shake + almonds\n" +
+                   "• Lunch: Grilled chicken + brown rice + broccoli\n" +
+                   "• Snack: Greek yogurt + berries\n" +
+                   "• Dinner: Salmon + sweet potato + asparagus";
+        else if (bmi < 29.9)
+            return "🥙 Lean-Cut Plan (BMI-based):\n" +
+                   "• Breakfast: Eggs + whole-grain toast + black coffee\n" +
+                   "• Lunch: Tuna salad + quinoa + leafy greens\n" +
+                   "• Snack: Apple + almond butter\n" +
+                   "• Dinner: Grilled turkey + roasted veggies\nGoal: mild deficit (-300 kcal/day)";
+        else
+            return "🥦 Low-Carb Deficit Plan (BMI-based):\n" +
+                   "• Breakfast: Egg whites + spinach omelette + green tea\n" +
+                   "• Lunch: Grilled chicken breast + large salad (no dressing)\n" +
+                   "• Snack: Cucumber + hummus\n" +
+                   "• Dinner: Baked fish + steamed broccoli\nGoal: deficit (-500 kcal/day), limit carbs";
+    }
+
+    /** Returns a BMI-based recommended workout plan if no trainer plan is assigned. */
+    private String getBmiBasedWorkoutPlan() {
+        if (currentMember == null || currentMember.weight <= 0 || currentMember.height <= 0)
+            return "No workout plan assigned yet. Contact your trainer.";
+        double hM = currentMember.height / 100.0;
+        double bmi = currentMember.weight / (hM * hM);
+        if (bmi < 18.5)
+            return "💪 Muscle-Gain Program (BMI-based):\n" +
+                   "• Mon/Wed/Fri: Heavy compound lifts (Squat, Deadlift, Bench)\n" +
+                   "• Tue/Thu: Accessory work + pull-ups + dips\n" +
+                   "• Sat: Rest or light walk\nGoal: progressive overload, 3–4 sets × 6–8 reps";
+        else if (bmi < 24.9)
+            return "🏋️ Maintenance & Tone Program (BMI-based):\n" +
+                   "• Mon/Wed/Fri: Full-body resistance training\n" +
+                   "• Tue/Thu: 30-min cardio (run/cycle)\n" +
+                   "• Sat: Flexibility & yoga\nGoal: maintain composition, moderate intensity";
+        else if (bmi < 29.9)
+            return "🔥 Fat-Burn Program (BMI-based):\n" +
+                   "• Mon/Wed/Fri: Circuit training (HIIT + weights)\n" +
+                   "• Tue/Thu: 45-min steady-state cardio\n" +
+                   "• Sat: Brisk walk or swim\nGoal: caloric burn, 70–80% max heart rate";
+        else
+            return "🚶 Low-Impact Start Program (BMI-based):\n" +
+                   "• Daily: 30-min brisk walk\n" +
+                   "• Mon/Wed/Fri: Light resistance bands + chair squats\n" +
+                   "• Sat: 20-min water aerobics or swimming\nGoal: build base fitness safely, increase each week";
     }
 
     private void setupFitnessTab() {
@@ -1707,26 +2057,13 @@ public class MemberDashboardActivity extends AppCompatActivity {
             String strHeight = etBmiHeight.getText().toString().trim();
             String strWeight = etBmiWeight.getText().toString().trim();
 
-            if (TextUtils.isEmpty(strHeight)) {
-                etBmiHeight.setError("Height is required");
-                etBmiHeight.requestFocus();
-                return;
-            }
-
-            if (TextUtils.isEmpty(strWeight)) {
-                etBmiWeight.setError("Weight is required");
-                etBmiWeight.requestFocus();
-                return;
-            }
+            if (TextUtils.isEmpty(strHeight)) { etBmiHeight.setError("Height is required"); etBmiHeight.requestFocus(); return; }
+            if (TextUtils.isEmpty(strWeight)) { etBmiWeight.setError("Weight is required"); etBmiWeight.requestFocus(); return; }
 
             try {
                 double h = Double.parseDouble(strHeight);
                 double w = Double.parseDouble(strWeight);
-
-                if (h <= 0 || w <= 0) {
-                    Toast.makeText(this, "Height and weight must be positive numbers.", Toast.LENGTH_SHORT).show();
-                    return;
-                }
+                if (h <= 0 || w <= 0) { Toast.makeText(this, "Height and weight must be positive.", Toast.LENGTH_SHORT).show(); return; }
 
                 currentMember.height = h;
                 currentMember.weight = w;
@@ -1734,82 +2071,120 @@ public class MemberDashboardActivity extends AppCompatActivity {
                 double hMeters = h / 100.0;
                 double bmi = w / (hMeters * hMeters);
 
-                // Add to log
-                if (currentMember.weightHistory == null) currentMember.weightHistory = new ArrayList<>();
-                currentMember.weightHistory.add(String.valueOf(w));
-
-                // Display
-                layoutBmiResult.setVisibility(View.VISIBLE);
-                tvBmiScore.setText(String.format(Locale.getDefault(), "%.1f", bmi));
-
                 String cat;
                 int color;
-                if (bmi < 18.5) {
-                    cat = "Underweight";
-                    color = Color.parseColor("#FF9500");
-                } else if (bmi < 24.9) {
-                    cat = "Normal Weight";
-                    color = Color.parseColor("#34C759");
-                } else if (bmi < 29.9) {
-                    cat = "Overweight";
-                    color = Color.parseColor("#FF9500");
-                } else {
-                    cat = "Obese";
-                    color = Color.parseColor("#FF3B30");
-                }
+                if (bmi < 18.5)      { cat = "Underweight";   color = Color.parseColor("#FF9500"); }
+                else if (bmi < 24.9) { cat = "Normal Weight"; color = Color.parseColor("#34C759"); }
+                else if (bmi < 29.9) { cat = "Overweight";    color = Color.parseColor("#FF9500"); }
+                else                 { cat = "Obese";          color = Color.parseColor("#FF3B30"); }
+
+                // Display result immediately
+                layoutBmiResult.setVisibility(View.VISIBLE);
+                tvBmiScore.setText(String.format(Locale.getDefault(), "%.1f", bmi));
                 tvBmiCategory.setText(cat);
                 tvBmiCategory.setTextColor(color);
 
                 currentMember.notifications.add("Calculated BMI: " + String.format(Locale.getDefault(), "%.1f", bmi) + " (" + cat + ")");
                 updateNotificationBadge();
-                refreshFitnessTab();
 
-                // Persist height, weight, and weight history to Firestore
+                // --- Firestore upsert: one document per member per day ---
+                Calendar cal = Calendar.getInstance();
+                String dateStr = cal.get(Calendar.DAY_OF_MONTH) + "/"
+                        + (cal.get(Calendar.MONTH) + 1) + "/" + cal.get(Calendar.YEAR);
+
                 if (currentMember.id != null && !currentMember.id.isEmpty()) {
-                    Map<String, Object> updates = new HashMap<>();
-                    updates.put("height", h);
-                    updates.put("weight", w);
-                    updates.put("weightHistory", currentMember.weightHistory);
-                    db.collection("users").document(currentMember.id)
-                            .update(updates)
-                            .addOnFailureListener(e ->
-                                    Toast.makeText(this, "BMI saved locally only.", Toast.LENGTH_SHORT).show());
-                }
+                    String docId = currentMember.id + "_" + dateStr.replace("/", "-");
 
-                Toast.makeText(this, "BMI calculated and Weight logged!", Toast.LENGTH_SHORT).show();
+                    Map<String, Object> logData = new HashMap<>();
+                    logData.put("memberId", currentMember.id);
+                    logData.put("memberName", currentMember.name != null ? currentMember.name : "Member");
+                    logData.put("date", dateStr);
+                    logData.put("height", h);
+                    logData.put("weight", w);
+                    logData.put("bmi", Math.round(bmi * 10.0) / 10.0);
+                    logData.put("bmiCategory", cat);
+                    logData.put("timestamp", com.google.firebase.Timestamp.now());
+
+                    db.collection("fitness_logs").document(docId)
+                            .set(logData)
+                            .addOnSuccessListener(unused -> {
+                                Toast.makeText(this, "✅ BMI logged for " + dateStr, Toast.LENGTH_SHORT).show();
+                                refreshFitnessTab();
+                            })
+                            .addOnFailureListener(e ->
+                                    Toast.makeText(this, "BMI calculated but not saved: " + e.getMessage(), Toast.LENGTH_SHORT).show());
+
+                    // Also update height/weight on the user document
+                    Map<String, Object> userUpdates = new HashMap<>();
+                    userUpdates.put("height", h);
+                    userUpdates.put("weight", w);
+                    db.collection("users").document(currentMember.id).update(userUpdates);
+                } else {
+                    Toast.makeText(this, "BMI calculated (not saved — member ID missing).", Toast.LENGTH_SHORT).show();
+                    refreshFitnessTab();
+                }
 
             } catch (NumberFormatException e) {
                 Toast.makeText(this, "Invalid number inputs", Toast.LENGTH_SHORT).show();
             }
         });
 
-        // Hydration tracker
+        // Hydration tracker — persists to Firestore after each change
         btnWaterMinus.setOnClickListener(v -> {
-            if (currentMember != null && currentMember.waterIntake > 0) {
-                currentMember.waterIntake--;
-                refreshFitnessTab();
-            }
+            if (currentMember == null || currentMember.waterIntake <= 0) return;
+            currentMember.waterIntake--;
+            persistWaterIntake();
+            tvWaterCount.setText(currentMember.waterIntake + " / 8 glasses");
         });
 
         btnWaterPlus.setOnClickListener(v -> {
             if (currentMember == null) return;
+            if (currentMember.waterIntake >= 20) { Toast.makeText(this, "Maximum tracking limit reached.", Toast.LENGTH_SHORT).show(); return; }
             currentMember.waterIntake++;
-            refreshFitnessTab();
+            persistWaterIntake();
+            tvWaterCount.setText(currentMember.waterIntake + " / 8 glasses");
             if (currentMember.waterIntake == 8) {
-                Toast.makeText(this, "💧 Awesome work! Hydration target met today! 💧", Toast.LENGTH_LONG).show();
+                Toast.makeText(this, "💧 Awesome! Daily hydration target met!", Toast.LENGTH_LONG).show();
                 currentMember.notifications.add("Great job meeting your daily hydration target (8 glasses)!");
                 updateNotificationBadge();
             }
         });
     }
 
+    /** Persists current waterIntake and today's date to Firestore. */
+    private void persistWaterIntake() {
+        if (currentMember == null || currentMember.id == null || currentMember.id.isEmpty()) return;
+        Calendar cal = Calendar.getInstance();
+        String todayStr = cal.get(Calendar.DAY_OF_MONTH) + "/"
+                + (cal.get(Calendar.MONTH) + 1) + "/" + cal.get(Calendar.YEAR);
+        currentMember.waterDate = todayStr;
+        Map<String, Object> waterUpdate = new HashMap<>();
+        waterUpdate.put("waterIntake", currentMember.waterIntake);
+        waterUpdate.put("waterDate", todayStr);
+        db.collection("users").document(currentMember.id).update(waterUpdate);
+    }
+
+
     // ==================== TAB 4: FEEDBACK & RATING ====================
+
     private void setupFeedbackTab() {
-        // Populate Spinner with real trainers from Firestore
+        // Filter trainers list: only allow feedback for trainers the member has booked
         List<String> list = new ArrayList<>();
         list.add("General Gym Experience");
+
+        List<String> bookedTrainerNames = new ArrayList<>();
+        for (Booking b : memberBookings) {
+            if (b.trainerName != null && !b.trainerName.isEmpty() && !b.trainerName.equalsIgnoreCase("None")) {
+                if (!bookedTrainerNames.contains(b.trainerName)) {
+                    bookedTrainerNames.add(b.trainerName);
+                }
+            }
+        }
+
         for (Trainer t : trainerList) {
-            list.add(t.name + " (" + t.specialization + ")");
+            if (bookedTrainerNames.contains(t.name)) {
+                list.add(t.name + " (" + t.specialization + ")");
+            }
         }
 
         ArrayAdapter<String> dataAdapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, list);
@@ -1850,17 +2225,22 @@ public class MemberDashboardActivity extends AppCompatActivity {
                     updateNotificationBadge();
                 }
 
-                // Link feedback to trainer in Firestore
+                // Link feedback to trainer in Firestore and re-calculate average rating
                 if (!item.equals("General Gym Experience")) {
                     for (Trainer t : trainerList) {
                         if (item.startsWith(t.name)) {
                             String reviewEntry = selectedRating + " ★ - \"" + feedbackMsg + "\" (by " + (currentMember != null ? currentMember.name : "Member") + ")";
                             t.addFeedback(reviewEntry);
+                            double newAvg = t.getAverageRating();
+                            t.rating = String.format(Locale.getDefault(), "%.1f", newAvg);
 
-                            // Persist feedback to Firestore trainer document
+                            // Persist updated feedback and average rating to Firestore trainer document
                             if (t.id != null && !t.id.isEmpty()) {
+                                Map<String, Object> updates = new HashMap<>();
+                                updates.put("feedback", t.feedback);
+                                updates.put("rating", t.rating);
                                 db.collection("users").document(t.id)
-                                        .update("feedback", t.feedback)
+                                        .update(updates)
                                         .addOnFailureListener(e ->
                                                 Toast.makeText(this, "Feedback saved locally only.", Toast.LENGTH_SHORT).show());
                             }
@@ -1871,10 +2251,11 @@ public class MemberDashboardActivity extends AppCompatActivity {
 
                 Toast.makeText(this, "Feedback submitted successfully. Thank you!", Toast.LENGTH_LONG).show();
 
-                // Clear fields
+                // Clear fields & refresh trainer list to show updated ratings
                 setStarRating(0);
                 etFeedbackMsg.setText("");
                 spinnerFeedbackTrainer.setSelection(0);
+                setupProgramsTab();
             }, 1200);
         });
     }

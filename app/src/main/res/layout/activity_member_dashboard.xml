@@ -880,26 +880,64 @@
                         </LinearLayout>
                     </LinearLayout>
 
-                    <!-- Weight History List -->
+                    <!-- BMI Log History -->
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="16dp"
                         android:fontFamily="sans-serif-bold"
-                        android:text="WEIGHT LOG HISTORY"
+                        android:text="BMI LOG HISTORY"
                         android:textColor="@color/text_muted"
                         android:textSize="9sp"
                         android:letterSpacing="0.08" />
 
-                    <TextView
-                        android:id="@+id/tv_weight_history_list"
+                    <LinearLayout
+                        android:id="@+id/layout_bmi_history_cards"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="6dp"
-                        android:fontFamily="monospace"
-                        android:text="• Oct 25: 70.0 kg"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:id="@+id/tv_bmi_history_empty"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:fontFamily="sans-serif"
+                            android:text="No BMI logs yet. Calculate above to start tracking."
+                            android:textColor="@color/text_gray"
+                            android:textSize="12sp" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <!-- WORKOUT PLAN CARD -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/bg_card"
+                    android:orientation="vertical"
+                    android:padding="20dp"
+                    android:layout_marginBottom="16dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:fontFamily="sans-serif-bold"
+                        android:text="WORKOUT PLAN (ASSIGNED)"
+                        android:textColor="@color/accent_green"
+                        android:textSize="11sp"
+                        android:letterSpacing="0.08"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/tv_fitness_workout_plan"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:fontFamily="sans-serif"
+                        android:text="No workout plan assigned yet. Contact your trainer."
                         android:textColor="@color/text_gray"
-                        android:textSize="12sp" />
+                        android:textSize="13sp"
+                        android:lineSpacingExtra="4dp" />
                 </LinearLayout>
 
                 <!-- MEAL PLAN / DIET CARD -->
@@ -915,114 +953,26 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:fontFamily="sans-serif-bold"
-                        android:text="DIET PLAN (RECOMMENDED)"
+                        android:text="DIET PLAN (ASSIGNED)"
                         android:textColor="@color/accent_purple"
                         android:textSize="11sp"
                         android:letterSpacing="0.08"
                         android:textStyle="bold" />
 
-                    <!-- Meal 1 -->
-                    <LinearLayout
+                    <TextView
+                        android:id="@+id/tv_fitness_diet_plan"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="12dp"
-                        android:orientation="vertical">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:fontFamily="sans-serif-bold"
-                            android:text="Breakfast (07:30 AM)"
-                            android:textColor="@color/text_white"
-                            android:textSize="13sp" />
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="2dp"
-                            android:fontFamily="sans-serif"
-                            android:text="Oatmeal with banana slices, whey protein shake, and 10 almonds."
-                            android:textColor="@color/text_gray"
-                            android:textSize="12sp" />
-                    </LinearLayout>
-
-                    <!-- Meal 2 -->
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="10dp"
-                        android:orientation="vertical">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:fontFamily="sans-serif-bold"
-                            android:text="Lunch (01:00 PM)"
-                            android:textColor="@color/text_white"
-                            android:textSize="13sp" />
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="2dp"
-                            android:fontFamily="sans-serif"
-                            android:text="Grilled chicken breast (200g), brown rice, steam-boiled broccoli, and olive oil dressing."
-                            android:textColor="@color/text_gray"
-                            android:textSize="12sp" />
-                    </LinearLayout>
-
-                    <!-- Meal 3 -->
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="10dp"
-                        android:orientation="vertical">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:fontFamily="sans-serif-bold"
-                            android:text="Snack / Pre-Workout (05:00 PM)"
-                            android:textColor="@color/text_white"
-                            android:textSize="13sp" />
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="2dp"
-                            android:fontFamily="sans-serif"
-                            android:text="Greek yogurt with mixed berries and 2 peanut butter rice cakes."
-                            android:textColor="@color/text_gray"
-                            android:textSize="12sp" />
-                    </LinearLayout>
-
-                    <!-- Meal 4 -->
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="10dp"
-                        android:orientation="vertical">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:fontFamily="sans-serif-bold"
-                            android:text="Dinner (08:30 PM)"
-                            android:textColor="@color/text_white"
-                            android:textSize="13sp" />
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="2dp"
-                            android:fontFamily="sans-serif"
-                            android:text="Baked salmon fillet, sweet potato mash, and stir-fried asparagus in coconut oil."
-                            android:textColor="@color/text_gray"
-                            android:textSize="12sp" />
-                    </LinearLayout>
+                        android:fontFamily="sans-serif"
+                        android:text="No diet plan assigned yet. Contact your trainer."
+                        android:textColor="@color/text_gray"
+                        android:textSize="13sp"
+                        android:lineSpacingExtra="4dp" />
                 </LinearLayout>
 
                 <!-- WATER TRACKER CARD -->
+
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
