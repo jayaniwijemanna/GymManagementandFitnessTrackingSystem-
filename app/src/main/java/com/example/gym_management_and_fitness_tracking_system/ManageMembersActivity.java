@@ -22,6 +22,9 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
+import com.google.firebase.firestore.DocumentReference;
+import com.google.firebase.firestore.DocumentSnapshot;
+import com.google.firebase.firestore.FirebaseFirestore;
 
 import java.util.List;
 
@@ -32,12 +35,15 @@ public class ManageMembersActivity extends AppCompatActivity {
     private MemberAdapter adapter;
     private LinearLayout layoutEmpty;
     private RecyclerView rvMembers;
+    private FirebaseFirestore db;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         EdgeToEdge.enable(this);
         setContentView(R.layout.activity_manage_members);
+
+        db = FirebaseFirestore.getInstance();
 
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main), (v, insets) -> {
             Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
@@ -58,13 +64,18 @@ public class ManageMembersActivity extends AppCompatActivity {
             }
             @Override
             public void onDelete(int position) {
-                String name = memberList.get(position).name;
-                memberList.remove(position);
-                adapter.notifyItemRemoved(position);
-                adapter.notifyItemRangeChanged(position, memberList.size());
-                adapter.filter(((EditText) findViewById(R.id.et_search_members)).getText().toString());
-                updateEmptyState();
-                Toast.makeText(ManageMembersActivity.this, name + " deleted", Toast.LENGTH_SHORT).show();
+                if (position < 0 || position >= memberList.size()) return;
+                Member m = memberList.get(position);
+                if (m.id != null && !m.id.isEmpty()) {
+                    db.collection("users").document(m.id).delete()
+                        .addOnSuccessListener(aVoid -> Toast.makeText(ManageMembersActivity.this, m.name + " deleted from database", Toast.LENGTH_SHORT).show())
+                        .addOnFailureListener(e -> Toast.makeText(ManageMembersActivity.this, "Error deleting member: " + e.getMessage(), Toast.LENGTH_SHORT).show());
+                } else {
+                    memberList.remove(position);
+                    adapter.filter(((EditText) findViewById(R.id.et_search_members)).getText().toString());
+                    updateEmptyState();
+                    Toast.makeText(ManageMembersActivity.this, m.name + " deleted", Toast.LENGTH_SHORT).show();
+                }
             }
         });
 
@@ -83,7 +94,44 @@ public class ManageMembersActivity extends AppCompatActivity {
         FloatingActionButton fabAdd = findViewById(R.id.fab_add_member);
         fabAdd.setOnClickListener(v -> showMemberBottomSheet(-1));
 
-        updateEmptyState();
+        listenToPackagesRealtime();
+        listenToMembersRealtime();
+    }
+
+    private void listenToPackagesRealtime() {
+        db.collection("packages").addSnapshotListener((value, error) -> {
+            if (value != null) {
+                packageList.clear();
+                for (DocumentSnapshot doc : value.getDocuments()) {
+                    GymPackage pkg = doc.toObject(GymPackage.class);
+                    if (pkg != null) {
+                        pkg.id = doc.getId();
+                        packageList.add(pkg);
+                    }
+                }
+            }
+        });
+    }
+
+    private void listenToMembersRealtime() {
+        db.collection("users").whereEqualTo("role", "member").addSnapshotListener((value, error) -> {
+            if (error != null) {
+                Toast.makeText(ManageMembersActivity.this, "Error loading members: " + error.getMessage(), Toast.LENGTH_SHORT).show();
+                return;
+            }
+            if (value != null) {
+                memberList.clear();
+                for (DocumentSnapshot doc : value.getDocuments()) {
+                    Member m = doc.toObject(Member.class);
+                    if (m != null) {
+                        m.id = doc.getId();
+                        memberList.add(m);
+                    }
+                }
+                adapter.filter(((EditText) findViewById(R.id.et_search_members)).getText().toString());
+                updateEmptyState();
+            }
+        });
     }
 
     @Override
@@ -124,14 +172,14 @@ public class ManageMembersActivity extends AppCompatActivity {
         tvTitle.setText(isEdit ? "Edit Member" : "Add Member");
         btnSave.setText(isEdit ? "Update Member" : "Save Member");
 
-        if (isEdit) {
+        if (isEdit && existing != null) {
             etName.setText(existing.name);
             etEmail.setText(existing.email);
             etPhone.setText(existing.phone);
         }
 
         // Track selected package
-        final String[] selectedPlan = {isEdit ? existing.plan : "No Package"};
+        final String[] selectedPlan = {(isEdit && existing != null && existing.plan != null) ? existing.plan : "No Package"};
 
         // "No Package" row is already in XML; wire up its click
         LinearLayout chipNoPackage = sheetView.findViewById(R.id.chip_no_package);
@@ -190,18 +238,27 @@ public class ManageMembersActivity extends AppCompatActivity {
             String phone = etPhone.getText().toString().trim();
             String plan = selectedPlan[0];
 
-            if (isEdit) {
+            if (isEdit && existing != null) {
                 existing.name = name;
                 existing.email = email;
                 existing.phone = phone;
                 existing.plan = plan;
-                adapter.filter(((EditText) findViewById(R.id.et_search_members)).getText().toString());
-                Toast.makeText(this, "Member updated!", Toast.LENGTH_SHORT).show();
+
+                if (existing.id != null && !existing.id.isEmpty()) {
+                    db.collection("users").document(existing.id).set(existing)
+                        .addOnSuccessListener(aVoid -> Toast.makeText(ManageMembersActivity.this, "Member updated!", Toast.LENGTH_SHORT).show())
+                        .addOnFailureListener(e -> Toast.makeText(ManageMembersActivity.this, "Failed to update: " + e.getMessage(), Toast.LENGTH_SHORT).show());
+                } else {
+                    adapter.filter(((EditText) findViewById(R.id.et_search_members)).getText().toString());
+                    Toast.makeText(this, "Member updated!", Toast.LENGTH_SHORT).show();
+                }
             } else {
-                memberList.add(new Member(name, email, phone, plan));
-                adapter.filter(((EditText) findViewById(R.id.et_search_members)).getText().toString());
-                updateEmptyState();
-                Toast.makeText(this, name + " added successfully!", Toast.LENGTH_SHORT).show();
+                DocumentReference newDoc = db.collection("users").document();
+                Member newMember = new Member(newDoc.getId(), name, email, phone, plan, "password");
+
+                newDoc.set(newMember)
+                    .addOnSuccessListener(aVoid -> Toast.makeText(ManageMembersActivity.this, name + " added successfully!", Toast.LENGTH_SHORT).show())
+                    .addOnFailureListener(e -> Toast.makeText(ManageMembersActivity.this, "Failed to add member: " + e.getMessage(), Toast.LENGTH_SHORT).show());
             }
             dialog.dismiss();
         });
