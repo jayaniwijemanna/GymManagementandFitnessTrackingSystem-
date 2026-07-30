@@ -401,6 +401,7 @@ public class MemberDashboardActivity extends AppCompatActivity {
                         refreshHomeTab();
                         setupProgramsTab();
                         setupBookingsTab();
+                        setupFeedbackTab();
                     }
                 });
     }
@@ -1168,11 +1169,15 @@ public class MemberDashboardActivity extends AppCompatActivity {
                 TextView tvInitials = trnView.findViewById(R.id.tv_trn_initials);
                 TextView tvName = trnView.findViewById(R.id.tv_trn_name);
                 TextView tvSpec = trnView.findViewById(R.id.tv_trn_spec);
+                TextView tvRating = trnView.findViewById(R.id.tv_trn_rating);
                 TextView btnBook = trnView.findViewById(R.id.btn_trn_book);
 
                 tvInitials.setText(t.getInitials());
                 tvName.setText(t.name);
                 tvSpec.setText(t.specialization);
+                if (tvRating != null) {
+                    tvRating.setText(t.getFormattedRating());
+                }
 
                 // Show 'Booked' state if this trainer is currently booked
                 boolean isBookedThisTrainer = false;
@@ -1969,11 +1974,23 @@ public class MemberDashboardActivity extends AppCompatActivity {
     // ==================== TAB 4: FEEDBACK & RATING ====================
 
     private void setupFeedbackTab() {
-        // Populate Spinner with real trainers from Firestore
+        // Filter trainers list: only allow feedback for trainers the member has booked
         List<String> list = new ArrayList<>();
         list.add("General Gym Experience");
+
+        List<String> bookedTrainerNames = new ArrayList<>();
+        for (Booking b : memberBookings) {
+            if (b.trainerName != null && !b.trainerName.isEmpty() && !b.trainerName.equalsIgnoreCase("None")) {
+                if (!bookedTrainerNames.contains(b.trainerName)) {
+                    bookedTrainerNames.add(b.trainerName);
+                }
+            }
+        }
+
         for (Trainer t : trainerList) {
-            list.add(t.name + " (" + t.specialization + ")");
+            if (bookedTrainerNames.contains(t.name)) {
+                list.add(t.name + " (" + t.specialization + ")");
+            }
         }
 
         ArrayAdapter<String> dataAdapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, list);
@@ -2014,17 +2031,22 @@ public class MemberDashboardActivity extends AppCompatActivity {
                     updateNotificationBadge();
                 }
 
-                // Link feedback to trainer in Firestore
+                // Link feedback to trainer in Firestore and re-calculate average rating
                 if (!item.equals("General Gym Experience")) {
                     for (Trainer t : trainerList) {
                         if (item.startsWith(t.name)) {
                             String reviewEntry = selectedRating + " ★ - \"" + feedbackMsg + "\" (by " + (currentMember != null ? currentMember.name : "Member") + ")";
                             t.addFeedback(reviewEntry);
+                            double newAvg = t.getAverageRating();
+                            t.rating = String.format(Locale.getDefault(), "%.1f", newAvg);
 
-                            // Persist feedback to Firestore trainer document
+                            // Persist updated feedback and average rating to Firestore trainer document
                             if (t.id != null && !t.id.isEmpty()) {
+                                Map<String, Object> updates = new HashMap<>();
+                                updates.put("feedback", t.feedback);
+                                updates.put("rating", t.rating);
                                 db.collection("users").document(t.id)
-                                        .update("feedback", t.feedback)
+                                        .update(updates)
                                         .addOnFailureListener(e ->
                                                 Toast.makeText(this, "Feedback saved locally only.", Toast.LENGTH_SHORT).show());
                             }
@@ -2035,10 +2057,11 @@ public class MemberDashboardActivity extends AppCompatActivity {
 
                 Toast.makeText(this, "Feedback submitted successfully. Thank you!", Toast.LENGTH_LONG).show();
 
-                // Clear fields
+                // Clear fields & refresh trainer list to show updated ratings
                 setStarRating(0);
                 etFeedbackMsg.setText("");
                 spinnerFeedbackTrainer.setSelection(0);
+                setupProgramsTab();
             }, 1200);
         });
     }
