@@ -22,6 +22,7 @@ public class Member {
     public String dietPlan = "";
     public int waterIntake = 0;
     public List<String> weightHistory = new ArrayList<>();
+    public List<String> bookingHistory = new ArrayList<>();
     public List<String> notifications = new ArrayList<>();
     public String checkedInTime = "Not Checked In";
 

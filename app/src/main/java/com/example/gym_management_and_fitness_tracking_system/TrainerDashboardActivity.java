@@ -26,6 +26,9 @@ import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 
+import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.ListenerRegistration;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -73,11 +76,18 @@ public class TrainerDashboardActivity extends AppCompatActivity {
     // In-memory chat storage for simulation
     private final Map<String, List<String>> memberChatLogs = new HashMap<>();
 
+    private FirebaseFirestore db;
+    private ListenerRegistration bookingsListener;
+    private ListenerRegistration membersListener;
+    private final List<Booking> trainerBookings = new ArrayList<>();
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         EdgeToEdge.enable(this);
         setContentView(R.layout.activity_trainer_dashboard);
+
+        db = FirebaseFirestore.getInstance();
 
         // Apply Insets
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.layout_header), (v, insets) -> {
@@ -111,10 +121,53 @@ public class TrainerDashboardActivity extends AppCompatActivity {
         initializeViews();
         setupNavigation();
         setupHeader();
+        listenToMembersRealtime();
+        listenToTrainerBookingsRealtime();
         refreshMembersTab();
         setupPlansTab();
         setupProgressTab();
         setupReviewsChatTab();
+    }
+
+    private void listenToTrainerBookingsRealtime() {
+        if (currentTrainer == null) return;
+        if (bookingsListener != null) bookingsListener.remove();
+
+        bookingsListener = db.collection("bookings")
+                .whereEqualTo("trainerName", currentTrainer.name)
+                .addSnapshotListener((value, error) -> {
+                    if (value != null) {
+                        trainerBookings.clear();
+                        for (com.google.firebase.firestore.DocumentSnapshot doc : value.getDocuments()) {
+                            Booking b = doc.toObject(Booking.class);
+                            if (b != null) {
+                                b.id = doc.getId();
+                                trainerBookings.add(b);
+                            }
+                        }
+                        java.util.Collections.sort(trainerBookings, (b1, b2) -> Long.compare(b2.timestamp, b1.timestamp));
+                        refreshMembersTab();
+                    }
+                });
+    }
+
+    private void listenToMembersRealtime() {
+        if (membersListener != null) membersListener.remove();
+        membersListener = db.collection("users").whereEqualTo("role", "member")
+                .addSnapshotListener((value, error) -> {
+                    if (value != null) {
+                        List<Member> members = DataStore.getInstance().members;
+                        members.clear();
+                        for (com.google.firebase.firestore.DocumentSnapshot doc : value.getDocuments()) {
+                            Member m = doc.toObject(Member.class);
+                            if (m != null) {
+                                m.id = doc.getId();
+                                members.add(m);
+                            }
+                        }
+                        refreshMembersTab();
+                    }
+                });
     }
 
     private void initializeViews() {
@@ -244,19 +297,18 @@ public class TrainerDashboardActivity extends AppCompatActivity {
         txt.setTextColor(Color.parseColor("#34C759"));
     }
 
-    // ==================== TAB 1: MEMBERS LIST ====================
+    // ==================== TAB 1: MEMBERS LIST / BOOKINGS ====================
     private void refreshMembersTab() {
         layoutMembersList.removeAllViews();
-        List<Member> assigned = getAssignedMembers();
 
-        if (assigned.isEmpty()) {
+        if (trainerBookings.isEmpty()) {
             layoutEmptyMembers.setVisibility(View.VISIBLE);
             return;
         }
         layoutEmptyMembers.setVisibility(View.GONE);
 
         LayoutInflater inflater = LayoutInflater.from(this);
-        for (Member m : assigned) {
+        for (Booking b : trainerBookings) {
             View itemView = inflater.inflate(R.layout.item_member, layoutMembersList, false);
 
             TextView tvInitials = itemView.findViewById(R.id.tv_member_initials);
@@ -265,43 +317,67 @@ public class TrainerDashboardActivity extends AppCompatActivity {
             ImageView btnEdit = itemView.findViewById(R.id.btn_edit_member);
             ImageView btnDelete = itemView.findViewById(R.id.btn_delete_member);
 
-            // Bind member data — repurpose tvPlan to show booking status + phone
-            tvInitials.setText(m.getInitials());
-            tvName.setText(m.name + "  |  " + m.phone + "  |  Check-in: " + m.checkedInTime);
+            // Member initials helper
+            String initials = "?";
+            if (b.memberName != null && !b.memberName.isEmpty()) {
+                String[] parts = b.memberName.trim().split("\\s+");
+                if (parts.length == 1) initials = String.valueOf(parts[0].charAt(0)).toUpperCase();
+                else initials = (String.valueOf(parts[0].charAt(0)) + String.valueOf(parts[1].charAt(0))).toUpperCase();
+            }
 
-            // Display booking status in the plan TextView with color coding
-            tvPlan.setText("Status: " + m.bookingStatus);
-            if ("Pending".equalsIgnoreCase(m.bookingStatus)) {
+            tvInitials.setText(initials);
+            tvName.setText((b.memberName != null ? b.memberName : "Member") + "  |  " + (b.bookedTime != null ? b.bookedTime : "Time N/A"));
+
+            String bStatus = b.status != null ? b.status : "Pending";
+            tvPlan.setText("Status: " + bStatus + "  (" + (b.memberPhone != null ? b.memberPhone : "") + ")");
+
+            if ("Pending".equalsIgnoreCase(bStatus)) {
                 tvPlan.setTextColor(Color.parseColor("#FF9500"));
-            } else if ("Accepted".equalsIgnoreCase(m.bookingStatus)) {
+                btnEdit.setVisibility(View.VISIBLE);
+                btnDelete.setVisibility(View.VISIBLE);
+            } else if ("Accepted".equalsIgnoreCase(bStatus)) {
                 tvPlan.setTextColor(Color.parseColor("#34C759"));
-            } else if ("Rejected".equalsIgnoreCase(m.bookingStatus)) {
+                btnEdit.setVisibility(View.GONE);
+                btnDelete.setVisibility(View.VISIBLE); // Allow cancelling/rejecting
+            } else if ("Rejected".equalsIgnoreCase(bStatus)) {
                 tvPlan.setTextColor(Color.parseColor("#FF3B30"));
+                btnEdit.setVisibility(View.VISIBLE); // Allow accepting again
+                btnDelete.setVisibility(View.GONE);
             } else {
                 tvPlan.setTextColor(Color.parseColor("#94A3B8"));
             }
 
-            // Replace Edit & Delete with Accept and Reject actions for bookings
+            // Accept Button Action
             btnEdit.setImageResource(R.drawable.ic_check);
             btnEdit.setColorFilter(Color.parseColor("#34C759"));
             btnEdit.setOnClickListener(v -> {
-                m.bookingStatus = "Accepted";
-                m.notifications.add("Trainer " + currentTrainer.name + " accepted your booking request.");
-                Toast.makeText(this, "Accepted booking from " + m.name, Toast.LENGTH_SHORT).show();
+                b.status = "Accepted";
+                if (b.id != null && !b.id.isEmpty()) {
+                    db.collection("bookings").document(b.id).update("status", "Accepted")
+                            .addOnSuccessListener(aVoid -> Toast.makeText(this, "Accepted booking for " + b.memberName, Toast.LENGTH_SHORT).show())
+                            .addOnFailureListener(e -> Toast.makeText(this, "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show());
+                }
+                if (b.memberId != null && !b.memberId.isEmpty()) {
+                    db.collection("users").document(b.memberId).update("bookingStatus", "Accepted");
+                }
                 refreshMembersTab();
             });
 
+            // Reject Button Action
             btnDelete.setImageResource(R.drawable.ic_delete);
             btnDelete.setColorFilter(Color.parseColor("#FF3B30"));
             btnDelete.setOnClickListener(v -> {
-                m.bookingStatus = "Rejected";
-                m.notifications.add("Trainer " + currentTrainer.name + " declined your booking request.");
-                Toast.makeText(this, "Rejected booking from " + m.name, Toast.LENGTH_SHORT).show();
+                b.status = "Rejected";
+                if (b.id != null && !b.id.isEmpty()) {
+                    db.collection("bookings").document(b.id).update("status", "Rejected")
+                            .addOnSuccessListener(aVoid -> Toast.makeText(this, "Rejected booking for " + b.memberName, Toast.LENGTH_SHORT).show())
+                            .addOnFailureListener(e -> Toast.makeText(this, "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show());
+                }
+                if (b.memberId != null && !b.memberId.isEmpty()) {
+                    db.collection("users").document(b.memberId).update("bookingStatus", "Rejected");
+                }
                 refreshMembersTab();
             });
-
-            // Make the item clickable to show member full details
-            itemView.setOnClickListener(v -> showMemberDetailsDialog(m));
 
             layoutMembersList.addView(itemView);
         }

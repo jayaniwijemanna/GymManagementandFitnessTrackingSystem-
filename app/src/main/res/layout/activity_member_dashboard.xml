@@ -424,6 +424,18 @@
                             android:textSize="15sp" />
                     </LinearLayout>
 
+                    <!-- Booking History List -->
+                    <TextView
+                        android:id="@+id/tv_home_booking_history"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:fontFamily="sans-serif"
+                        android:text="• Booking History: No past bookings"
+                        android:textColor="@color/text_gray"
+                        android:textSize="12sp"
+                        android:visibility="gone" />
+
                     <LinearLayout
                         android:id="@+id/btn_home_book_trainer"
                         android:layout_width="match_parent"
@@ -1286,6 +1298,158 @@
             </LinearLayout>
         </ScrollView>
 
+        <!-- ===== TAB 5: BOOKING HISTORY TRACKER ===== -->
+        <ScrollView
+            android:id="@+id/view_bookings"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:fillViewport="true"
+            android:scrollbars="none"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:paddingHorizontal="20dp"
+                android:paddingTop="16dp"
+                android:paddingBottom="24dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="sans-serif-bold"
+                    android:letterSpacing="0.08"
+                    android:text="SESSION BOOKINGS &amp; HISTORY"
+                    android:textColor="@color/text_gray"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+
+                <!-- Summary Cards Row -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:orientation="horizontal">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginEnd="6dp"
+                        android:background="@drawable/bg_card"
+                        android:orientation="vertical"
+                        android:padding="14dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="TOTAL"
+                            android:textColor="@color/text_gray"
+                            android:textSize="10sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:id="@+id/tv_booking_stat_total"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="4dp"
+                            android:fontFamily="sans-serif-bold"
+                            android:text="0"
+                            android:textColor="@color/text_white"
+                            android:textSize="20sp" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginHorizontal="3dp"
+                        android:background="@drawable/bg_card"
+                        android:orientation="vertical"
+                        android:padding="14dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="PENDING"
+                            android:textColor="@color/text_gray"
+                            android:textSize="10sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:id="@+id/tv_booking_stat_pending"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="4dp"
+                            android:fontFamily="sans-serif-bold"
+                            android:text="0"
+                            android:textColor="@color/accent_orange"
+                            android:textSize="20sp" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginStart="6dp"
+                        android:background="@drawable/bg_card"
+                        android:orientation="vertical"
+                        android:padding="14dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="ACCEPTED"
+                            android:textColor="@color/text_gray"
+                            android:textSize="10sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:id="@+id/tv_booking_stat_accepted"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="4dp"
+                            android:fontFamily="sans-serif-bold"
+                            android:text="0"
+                            android:textColor="@color/accent_green"
+                            android:textSize="20sp" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <!-- Bookings History Container -->
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="20dp"
+                    android:fontFamily="sans-serif-bold"
+                    android:letterSpacing="0.08"
+                    android:text="ALL BOOKINGS"
+                    android:textColor="@color/text_gray"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+
+                <LinearLayout
+                    android:id="@+id/layout_bookings_history_list"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:orientation="vertical" />
+
+                <TextView
+                    android:id="@+id/tv_empty_bookings_history"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:fontFamily="sans-serif"
+                    android:text="No booking records found. Select a trainer from the Programs tab to book a session."
+                    android:textColor="@color/text_gray"
+                    android:textSize="13sp"
+                    android:visibility="gone" />
+
+            </LinearLayout>
+        </ScrollView>
+
     </FrameLayout>
 
     <!-- ===== BOTTOM NAVIGATION BAR ===== -->
@@ -1356,7 +1520,36 @@
                 android:textSize="11sp" />
         </LinearLayout>
 
-        <!-- Tab 3: Fitness -->
+        <!-- Tab 3: Bookings -->
+        <LinearLayout
+            android:id="@+id/nav_tab_bookings"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center"
+            android:orientation="vertical">
+
+            <ImageView
+                android:id="@+id/img_nav_bookings"
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:src="@drawable/ic_calendar"
+                app:tint="@color/text_gray" />
+
+            <TextView
+                android:id="@+id/tv_nav_bookings"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="3dp"
+                android:fontFamily="sans-serif-medium"
+                android:text="Bookings"
+                android:textColor="@color/text_gray"
+                android:textSize="11sp" />
+        </LinearLayout>
+
+        <!-- Tab 4: Fitness -->
         <LinearLayout
             android:id="@+id/nav_tab_fitness"
             android:layout_width="0dp"
@@ -1385,7 +1578,7 @@
                 android:textSize="11sp" />
         </LinearLayout>
 
-        <!-- Tab 4: Feedback -->
+        <!-- Tab 5: Feedback -->
         <LinearLayout
             android:id="@+id/nav_tab_feedback"
             android:layout_width="0dp"

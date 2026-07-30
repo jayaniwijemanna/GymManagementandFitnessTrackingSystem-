@@ -31,6 +31,7 @@ import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 
+import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.firestore.DocumentReference;
@@ -57,6 +58,9 @@ public class MemberDashboardActivity extends AppCompatActivity {
     private ListenerRegistration memberListener;
     private ListenerRegistration packagesListener;
     private ListenerRegistration trainersListener;
+    private ListenerRegistration bookingsListener;
+
+    private final List<Booking> memberBookings = new ArrayList<>();
 
     // Local list references from DataStore (kept in sync by Firestore listeners)
     private final List<GymPackage> packageList = DataStore.getInstance().packages;
@@ -69,17 +73,17 @@ public class MemberDashboardActivity extends AppCompatActivity {
     private FrameLayout btnLogout;
 
     // View Containers (Tabs)
-    private ScrollView viewHome, viewPrograms, viewFitness, viewFeedback;
+    private ScrollView viewHome, viewPrograms, viewFitness, viewFeedback, viewBookings;
 
     // Navigation Tab Buttons
-    private LinearLayout navTabHome, navTabPrograms, navTabFitness, navTabFeedback;
-    private ImageView imgNavHome, imgNavPrograms, imgNavFitness, imgNavFeedback;
-    private TextView tvNavHome, tvNavPrograms, tvNavFitness, tvNavFeedback;
+    private LinearLayout navTabHome, navTabPrograms, navTabFitness, navTabFeedback, navTabBookings;
+    private ImageView imgNavHome, imgNavPrograms, imgNavFitness, imgNavFeedback, imgNavBookings;
+    private TextView tvNavHome, tvNavPrograms, tvNavFitness, tvNavFeedback, tvNavBookings;
 
     // Home Tab elements
     private TextView tvHomePlanName, tvHomePlanStatus, tvHomePlanDesc;
     private TextView tvHomeCheckinStatus, tvHomeCheckinBadge;
-    private TextView tvHomeBookingInfo, tvHomeWorkoutPlan, tvHomeDietPlan, tvHomeChatTrainerName;
+    private TextView tvHomeBookingInfo, tvHomeBookingHistory, tvHomeWorkoutPlan, tvHomeDietPlan, tvHomeChatTrainerName;
     private TextView tvPendingPlanInfo;
     private LinearLayout btnHomeBuyPlan, btnHomeChangePlan, btnHomeCheckin, btnHomeBookTrainer, btnHomeChat;
     private LinearLayout layoutPendingPlanInfo;
@@ -98,6 +102,11 @@ public class MemberDashboardActivity extends AppCompatActivity {
     private Spinner spinnerFeedbackTrainer;
     private LinearLayout layoutRatingStars;
     private EditText etFeedbackMsg;
+    // Bookings Tab details
+    private TextView tvBookingStatTotal, tvBookingStatPending, tvBookingStatAccepted;
+    private LinearLayout layoutBookingsHistoryList;
+    private TextView tvEmptyBookingsHistory;
+
     private LinearLayout btnSubmitFeedback;
     private int selectedRating = 0;
     private ImageView[] starViews = new ImageView[5];
@@ -280,6 +289,9 @@ public class MemberDashboardActivity extends AppCompatActivity {
      */
     private void onMemberLoaded() {
         setupHeader();
+        if (currentMember != null && currentMember.id != null && !currentMember.id.isEmpty()) {
+            listenToBookingsRealtime(currentMember.id);
+        }
         refreshHomeTab();
         setupProgramsTab();
         setupFitnessTab();
@@ -348,6 +360,31 @@ public class MemberDashboardActivity extends AppCompatActivity {
         if (memberListener != null) memberListener.remove();
         if (packagesListener != null) packagesListener.remove();
         if (trainersListener != null) trainersListener.remove();
+        if (bookingsListener != null) bookingsListener.remove();
+    }
+
+    private void listenToBookingsRealtime(String memberId) {
+        if (TextUtils.isEmpty(memberId)) return;
+        if (bookingsListener != null) bookingsListener.remove();
+
+        bookingsListener = db.collection("bookings")
+                .whereEqualTo("memberId", memberId)
+                .addSnapshotListener((value, error) -> {
+                    if (value != null) {
+                        memberBookings.clear();
+                        for (DocumentSnapshot doc : value.getDocuments()) {
+                            Booking b = doc.toObject(Booking.class);
+                            if (b != null) {
+                                b.id = doc.getId();
+                                memberBookings.add(b);
+                            }
+                        }
+                        java.util.Collections.sort(memberBookings, (b1, b2) -> Long.compare(b2.timestamp, b1.timestamp));
+                        refreshHomeTab();
+                        setupProgramsTab();
+                        setupBookingsTab();
+                    }
+                });
     }
 
     // ==================== VIEW INITIALIZATION ====================
@@ -363,22 +400,26 @@ public class MemberDashboardActivity extends AppCompatActivity {
         // Main Tabs
         viewHome = findViewById(R.id.view_home);
         viewPrograms = findViewById(R.id.view_programs);
+        viewBookings = findViewById(R.id.view_bookings);
         viewFitness = findViewById(R.id.view_fitness);
         viewFeedback = findViewById(R.id.view_feedback);
 
         // Bottom Navigation tabs
         navTabHome = findViewById(R.id.nav_tab_home);
         navTabPrograms = findViewById(R.id.nav_tab_programs);
+        navTabBookings = findViewById(R.id.nav_tab_bookings);
         navTabFitness = findViewById(R.id.nav_tab_fitness);
         navTabFeedback = findViewById(R.id.nav_tab_feedback);
 
         imgNavHome = findViewById(R.id.img_nav_home);
         imgNavPrograms = findViewById(R.id.img_nav_programs);
+        imgNavBookings = findViewById(R.id.img_nav_bookings);
         imgNavFitness = findViewById(R.id.img_nav_fitness);
         imgNavFeedback = findViewById(R.id.img_nav_feedback);
 
         tvNavHome = findViewById(R.id.tv_nav_home);
         tvNavPrograms = findViewById(R.id.tv_nav_programs);
+        tvNavBookings = findViewById(R.id.tv_nav_bookings);
         tvNavFitness = findViewById(R.id.tv_nav_fitness);
         tvNavFeedback = findViewById(R.id.tv_nav_feedback);
 
@@ -389,6 +430,7 @@ public class MemberDashboardActivity extends AppCompatActivity {
         tvHomeCheckinStatus = findViewById(R.id.tv_home_checkin_status);
         tvHomeCheckinBadge = findViewById(R.id.tv_home_checkin_badge);
         tvHomeBookingInfo = findViewById(R.id.tv_home_booking_info);
+        tvHomeBookingHistory = findViewById(R.id.tv_home_booking_history);
         tvHomeWorkoutPlan = findViewById(R.id.tv_home_workout_plan);
         tvHomeDietPlan = findViewById(R.id.tv_home_diet_plan);
         tvHomeChatTrainerName = findViewById(R.id.tv_home_chat_trainer_name);
@@ -416,7 +458,12 @@ public class MemberDashboardActivity extends AppCompatActivity {
         btnWaterMinus = findViewById(R.id.btn_water_minus);
         btnWaterPlus = findViewById(R.id.btn_water_plus);
 
-        // Feedback Tab details
+        // Bookings Tab details
+        tvBookingStatTotal = findViewById(R.id.tv_booking_stat_total);
+        tvBookingStatPending = findViewById(R.id.tv_booking_stat_pending);
+        tvBookingStatAccepted = findViewById(R.id.tv_booking_stat_accepted);
+        layoutBookingsHistoryList = findViewById(R.id.layout_bookings_history_list);
+        tvEmptyBookingsHistory = findViewById(R.id.tv_empty_bookings_history);
         spinnerFeedbackTrainer = findViewById(R.id.spinner_feedback_trainer);
         layoutRatingStars = findViewById(R.id.layout_rating_stars);
         etFeedbackMsg = findViewById(R.id.et_feedback_msg);
@@ -484,20 +531,23 @@ public class MemberDashboardActivity extends AppCompatActivity {
     private void setupNavigation() {
         navTabHome.setOnClickListener(v -> selectTab(0));
         navTabPrograms.setOnClickListener(v -> selectTab(1));
-        navTabFitness.setOnClickListener(v -> selectTab(2));
-        navTabFeedback.setOnClickListener(v -> selectTab(3));
+        navTabBookings.setOnClickListener(v -> selectTab(2));
+        navTabFitness.setOnClickListener(v -> selectTab(3));
+        navTabFeedback.setOnClickListener(v -> selectTab(4));
     }
 
     private void selectTab(int index) {
         // Hide all views
         viewHome.setVisibility(View.GONE);
         viewPrograms.setVisibility(View.GONE);
+        if (viewBookings != null) viewBookings.setVisibility(View.GONE);
         viewFitness.setVisibility(View.GONE);
         viewFeedback.setVisibility(View.GONE);
 
         // Reset navigation colors
         resetTabStyle(imgNavHome, tvNavHome);
         resetTabStyle(imgNavPrograms, tvNavPrograms);
+        if (imgNavBookings != null) resetTabStyle(imgNavBookings, tvNavBookings);
         resetTabStyle(imgNavFitness, tvNavFitness);
         resetTabStyle(imgNavFeedback, tvNavFeedback);
 
@@ -514,11 +564,16 @@ public class MemberDashboardActivity extends AppCompatActivity {
                 setupProgramsTab();
                 break;
             case 2:
+                if (viewBookings != null) viewBookings.setVisibility(View.VISIBLE);
+                if (imgNavBookings != null) highlightTab(imgNavBookings, tvNavBookings);
+                setupBookingsTab();
+                break;
+            case 3:
                 viewFitness.setVisibility(View.VISIBLE);
                 highlightTab(imgNavFitness, tvNavFitness);
                 refreshFitnessTab();
                 break;
-            case 3:
+            case 4:
                 viewFeedback.setVisibility(View.VISIBLE);
                 highlightTab(imgNavFeedback, tvNavFeedback);
                 setupFeedbackTab();
@@ -650,19 +705,49 @@ public class MemberDashboardActivity extends AppCompatActivity {
             btnHomeCheckin.setVisibility(View.GONE);
         }
 
-        // Trainer booking
-        if (currentMember.bookedTrainer == null || currentMember.bookedTrainer.equals("None")) {
+        // Trainer booking status & history from integrated bookings collection
+        if (memberBookings.isEmpty()) {
             tvHomeBookingInfo.setText("No active personal trainer booking.");
             btnHomeBookTrainer.setVisibility(View.VISIBLE);
             tvHomeChatTrainerName.setText("No active personal trainer");
             btnHomeChat.setEnabled(false);
             btnHomeChat.setAlpha(0.5f);
+            tvHomeBookingHistory.setVisibility(View.GONE);
         } else {
-            tvHomeBookingInfo.setText("Booked: " + currentMember.bookedTrainer + " (" + currentMember.bookingStatus + ")\nTime: " + currentMember.bookedTime);
-            btnHomeBookTrainer.setVisibility(View.GONE);
-            tvHomeChatTrainerName.setText("Chat with " + currentMember.bookedTrainer);
-            btnHomeChat.setEnabled(true);
-            btnHomeChat.setAlpha(1.0f);
+            Booking latest = memberBookings.get(0);
+            tvHomeBookingInfo.setText("Trainer: " + latest.trainerName + " (" + latest.status + ")\nTime: " + latest.bookedTime);
+
+            if ("Pending".equalsIgnoreCase(latest.status) || "Accepted".equalsIgnoreCase(latest.status)) {
+                btnHomeBookTrainer.setVisibility(View.GONE);
+                tvHomeChatTrainerName.setText("Chat with " + latest.trainerName);
+                btnHomeChat.setEnabled(true);
+                btnHomeChat.setAlpha(1.0f);
+            } else {
+                btnHomeBookTrainer.setVisibility(View.VISIBLE);
+                tvHomeChatTrainerName.setText("No active personal trainer");
+                btnHomeChat.setEnabled(false);
+                btnHomeChat.setAlpha(0.5f);
+            }
+
+            StringBuilder sb = new StringBuilder("• Booking History (" + memberBookings.size() + " total):\n");
+            for (Booking b : memberBookings) {
+                String st = b.status != null ? b.status : "Pending";
+                sb.append("  - ").append(b.trainerName).append(" | ").append(b.bookedTime).append(" [").append(st).append("]\n");
+            }
+            tvHomeBookingHistory.setText(sb.toString().trim());
+            tvHomeBookingHistory.setVisibility(View.VISIBLE);
+        }
+
+        // Render booking history log
+        if (currentMember.bookingHistory != null && !currentMember.bookingHistory.isEmpty()) {
+            StringBuilder sb = new StringBuilder("• Booking History:\n");
+            for (int i = currentMember.bookingHistory.size() - 1; i >= 0; i--) {
+                sb.append("  - ").append(currentMember.bookingHistory.get(i)).append("\n");
+            }
+            tvHomeBookingHistory.setText(sb.toString().trim());
+            tvHomeBookingHistory.setVisibility(View.VISIBLE);
+        } else {
+            tvHomeBookingHistory.setVisibility(View.GONE);
         }
 
         // Workout and Diet Plans binding
@@ -843,13 +928,23 @@ public class MemberDashboardActivity extends AppCompatActivity {
                 tvName.setText(t.name);
                 tvSpec.setText(t.specialization);
 
-                // Show 'Booked' state if this trainer is already booked
-                if (t.name != null && t.name.equalsIgnoreCase(currentMember.bookedTrainer)) {
+                // Show 'Booked' state if this trainer is currently booked
+                boolean isBookedThisTrainer = false;
+                for (Booking b : memberBookings) {
+                    if (b.trainerName != null && b.trainerName.equalsIgnoreCase(t.name)
+                            && ("Pending".equalsIgnoreCase(b.status) || "Accepted".equalsIgnoreCase(b.status))) {
+                        isBookedThisTrainer = true;
+                        break;
+                    }
+                }
+
+                if (isBookedThisTrainer) {
                     btnBook.setText("Booked ✓");
                     btnBook.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.parseColor("#0D2818")));
                     btnBook.setTextColor(Color.parseColor("#34C759"));
                     btnBook.setClickable(false);
                 } else {
+                    btnBook.setText("Book Trainer");
                     btnBook.setOnClickListener(v -> showBookingDialog(t));
                 }
 
@@ -858,63 +953,203 @@ public class MemberDashboardActivity extends AppCompatActivity {
         }
     }
 
+    // ==================== TAB 3: BOOKINGS HISTORY TRACKER ====================
+    private void setupBookingsTab() {
+        if (layoutBookingsHistoryList == null) return;
+        layoutBookingsHistoryList.removeAllViews();
+
+        int total = memberBookings.size();
+        int pending = 0;
+        int accepted = 0;
+
+        for (Booking b : memberBookings) {
+            if ("Pending".equalsIgnoreCase(b.status)) pending++;
+            else if ("Accepted".equalsIgnoreCase(b.status)) accepted++;
+        }
+
+        if (tvBookingStatTotal != null) tvBookingStatTotal.setText(String.valueOf(total));
+        if (tvBookingStatPending != null) tvBookingStatPending.setText(String.valueOf(pending));
+        if (tvBookingStatAccepted != null) tvBookingStatAccepted.setText(String.valueOf(accepted));
+
+        if (memberBookings.isEmpty()) {
+            if (tvEmptyBookingsHistory != null) tvEmptyBookingsHistory.setVisibility(View.VISIBLE);
+            return;
+        }
+        if (tvEmptyBookingsHistory != null) tvEmptyBookingsHistory.setVisibility(View.GONE);
+
+        for (Booking b : memberBookings) {
+            LinearLayout card = new LinearLayout(this);
+            card.setOrientation(LinearLayout.VERTICAL);
+            card.setBackgroundResource(R.drawable.bg_card);
+            card.setPadding(24, 18, 24, 18);
+            LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            cardLp.setMargins(0, 0, 0, 14);
+            card.setLayoutParams(cardLp);
+
+            // Row 1: Trainer Name + Status Badge
+            LinearLayout row1 = new LinearLayout(this);
+            row1.setOrientation(LinearLayout.HORIZONTAL);
+            row1.setGravity(android.view.Gravity.CENTER_VERTICAL);
+
+            TextView tvTrn = new TextView(this);
+            tvTrn.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f));
+            tvTrn.setText("Trainer: " + (b.trainerName != null ? b.trainerName : "Trainer"));
+            tvTrn.setTextColor(Color.WHITE);
+            tvTrn.setTextSize(15);
+            tvTrn.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+            row1.addView(tvTrn);
+
+            TextView tvBadge = new TextView(this);
+            tvBadge.setPadding(20, 8, 20, 8);
+            tvBadge.setTextSize(11);
+            tvBadge.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+            tvBadge.setBackgroundResource(R.drawable.bg_badge);
+
+            String statusStr = b.status != null ? b.status : "Pending";
+            tvBadge.setText(statusStr);
+
+            if ("Accepted".equalsIgnoreCase(statusStr)) {
+                tvBadge.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.parseColor("#0D2818")));
+                tvBadge.setTextColor(Color.parseColor("#34C759"));
+            } else if ("Rejected".equalsIgnoreCase(statusStr)) {
+                tvBadge.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.parseColor("#2D1010")));
+                tvBadge.setTextColor(Color.parseColor("#FF3B30"));
+            } else {
+                tvBadge.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.parseColor("#2A1A0D")));
+                tvBadge.setTextColor(Color.parseColor("#FF9500"));
+            }
+            row1.addView(tvBadge);
+            card.addView(row1);
+
+            // Row 2: Booked Session Time
+            TextView tvTime = new TextView(this);
+            tvTime.setText("📅  Session Slot: " + (b.bookedTime != null ? b.bookedTime : "N/A"));
+            tvTime.setTextColor(Color.parseColor("#94A3B8"));
+            tvTime.setTextSize(13);
+            tvTime.setPadding(0, 8, 0, 0);
+            card.addView(tvTime);
+
+            layoutBookingsHistoryList.addView(card);
+        }
+    }
+
     /**
-     * Shows a plan application dialog.
+     * Shows a plan application dialog with the Titan Gym dark theme bottom sheet.
      * @param pkg The package the member wants to apply for.
      * @param isSwitch true if the member already has a pending application and wants to switch it.
      */
     private void showPlanApplicationDialog(GymPackage pkg, boolean isSwitch) {
-        AlertDialog.Builder builder = new AlertDialog.Builder(this, AlertDialog.THEME_HOLO_DARK);
+        BottomSheetDialog dialog = new BottomSheetDialog(this);
 
-        boolean hasActivePlan = "Active".equalsIgnoreCase(currentMember.planStatus)
-                && currentMember.plan != null && !currentMember.plan.isEmpty()
-                && !currentMember.plan.equals("None");
-
-        String title = isSwitch ? "Switch Plan Application"
-                : hasActivePlan ? "Request Plan Change" : "Apply for Membership Plan";
-        builder.setTitle(title);
-
+        // Root container with dark background
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(40, 30, 40, 30);
+        root.setPadding(40, 24, 40, 36);
+        root.setBackgroundResource(R.drawable.bg_bottom_sheet);
 
-        // Package info
-        TextView info = new TextView(this);
-        info.setText("Package: " + pkg.name + "\nPrice: $" + pkg.price + " / month\n\n" + pkg.description);
-        info.setTextColor(Color.WHITE);
-        info.setTextSize(15);
-        info.setLineSpacing(1.2f, 1.2f);
-        root.addView(info);
+        // Drag handle indicator
+        View handle = new View(this);
+        LinearLayout.LayoutParams handleLp = new LinearLayout.LayoutParams(100, 10);
+        handleLp.gravity = android.view.Gravity.CENTER_HORIZONTAL;
+        handleLp.setMargins(0, 0, 0, 30);
+        handle.setLayoutParams(handleLp);
+        handle.setBackgroundResource(R.drawable.bg_input_default);
+        root.addView(handle);
 
-        // Admin approval notice
-        View divider = new View(this);
-        divider.setMinimumHeight(20);
-        root.addView(divider);
+        // Title
+        boolean hasActivePlan = "Active".equalsIgnoreCase(currentMember.planStatus)
+                && currentMember.plan != null && !currentMember.plan.isEmpty()
+                && !currentMember.plan.equals("None") && !currentMember.plan.equals("No Package");
 
-        TextView notice = new TextView(this);
-        notice.setText("⚠  Your application will be submitted for admin verification. Once approved, the plan will be activated on your account.");
-        notice.setTextColor(Color.parseColor("#FF9500"));
-        notice.setTextSize(13);
-        notice.setLineSpacing(1.2f, 1.2f);
-        root.addView(notice);
+        String titleStr = isSwitch ? "Switch Plan Application"
+                : hasActivePlan ? "Request Plan Change" : "Apply for Membership Plan";
+
+        TextView tvTitle = new TextView(this);
+        tvTitle.setText(titleStr);
+        tvTitle.setTextColor(Color.WHITE);
+        tvTitle.setTextSize(20);
+        tvTitle.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        tvTitle.setPadding(0, 0, 0, 24);
+        root.addView(tvTitle);
+
+        // Package Info Card
+        LinearLayout cardPkg = new LinearLayout(this);
+        cardPkg.setOrientation(LinearLayout.VERTICAL);
+        cardPkg.setBackgroundResource(R.drawable.bg_action_card);
+        cardPkg.setPadding(24, 20, 24, 20);
+
+        TextView tvPkgName = new TextView(this);
+        tvPkgName.setText(pkg.name);
+        tvPkgName.setTextColor(Color.WHITE);
+        tvPkgName.setTextSize(18);
+        tvPkgName.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        cardPkg.addView(tvPkgName);
+
+        TextView tvPkgPrice = new TextView(this);
+        tvPkgPrice.setText("$" + pkg.price + " / month");
+        tvPkgPrice.setTextColor(Color.parseColor("#34C759"));
+        tvPkgPrice.setTextSize(15);
+        tvPkgPrice.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        tvPkgPrice.setPadding(0, 4, 0, 12);
+        cardPkg.addView(tvPkgPrice);
+
+        TextView tvPkgDesc = new TextView(this);
+        tvPkgDesc.setText(pkg.description);
+        tvPkgDesc.setTextColor(Color.parseColor("#94A3B8"));
+        tvPkgDesc.setTextSize(13);
+        cardPkg.addView(tvPkgDesc);
+
+        root.addView(cardPkg);
+
+        // Verification Notice Card
+        LinearLayout cardNotice = new LinearLayout(this);
+        cardNotice.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams noticeLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        noticeLp.setMargins(0, 16, 0, 24);
+        cardNotice.setLayoutParams(noticeLp);
+        cardNotice.setBackgroundResource(R.drawable.bg_card);
+        cardNotice.setPadding(20, 16, 20, 16);
+
+        TextView tvNotice = new TextView(this);
+        tvNotice.setText("⚠  Your application will be submitted for admin verification. Once approved, the plan will be activated on your account.");
+        tvNotice.setTextColor(Color.parseColor("#FF9500"));
+        tvNotice.setTextSize(13);
+        cardNotice.addView(tvNotice);
 
         if (hasActivePlan) {
-            View divider2 = new View(this);
-            divider2.setMinimumHeight(12);
-            root.addView(divider2);
-
-            TextView changeNote = new TextView(this);
-            changeNote.setText("Current plan: " + currentMember.plan + " (remains active until admin approves the change).");
-            changeNote.setTextColor(Color.parseColor("#94A3B8"));
-            changeNote.setTextSize(12);
-            root.addView(changeNote);
+            TextView tvActiveNotice = new TextView(this);
+            tvActiveNotice.setText("Current plan: " + currentMember.plan + " (remains active until admin approves the change).");
+            tvActiveNotice.setTextColor(Color.parseColor("#94A3B8"));
+            tvActiveNotice.setTextSize(12);
+            tvActiveNotice.setPadding(0, 8, 0, 0);
+            cardNotice.addView(tvActiveNotice);
         }
 
-        builder.setView(root);
+        root.addView(cardNotice);
+
+        // Submit Button
         String confirmLabel = isSwitch ? "Switch Application" : hasActivePlan ? "Request Change" : "Submit Application";
-        builder.setPositiveButton(confirmLabel, (dialog, which) -> submitPlanApplication(pkg));
-        builder.setNegativeButton("Cancel", null);
-        builder.show();
+        android.widget.Button btnSubmit = new android.widget.Button(this);
+        LinearLayout.LayoutParams btnLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, spToPx(48));
+        btnSubmit.setLayoutParams(btnLp);
+        btnSubmit.setText(confirmLabel);
+        btnSubmit.setTextColor(Color.WHITE);
+        btnSubmit.setTextSize(15);
+        btnSubmit.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        btnSubmit.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.parseColor("#007AFF")));
+
+        btnSubmit.setOnClickListener(v -> {
+            dialog.dismiss();
+            submitPlanApplication(pkg);
+        });
+
+        root.addView(btnSubmit);
+
+        dialog.setContentView(root);
+        dialog.show();
     }
 
     /**
@@ -955,58 +1190,228 @@ public class MemberDashboardActivity extends AppCompatActivity {
         }, 1200);
     }
 
+    /**
+     * Displays trainer details, real-time availability status, and date/time pickers prior to booking.
+     * Uses the Titan Gym dark theme bottom sheet format.
+     */
     private void showBookingDialog(Trainer trainer) {
-        Calendar calendar = Calendar.getInstance();
+        BottomSheetDialog dialog = new BottomSheetDialog(this);
 
-        // 1. Date Picker
-        DatePickerDialog datePickerDialog = new DatePickerDialog(this, (view, year, month, dayOfMonth) -> {
-            String selectedDate = dayOfMonth + "/" + (month + 1) + "/" + year;
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setPadding(40, 24, 40, 36);
+        root.setBackgroundResource(R.drawable.bg_bottom_sheet);
 
-            // 2. Time Picker
-            TimePickerDialog timePickerDialog = new TimePickerDialog(this, (timeView, hourOfDay, minute) -> {
-                String selectedTime = String.format(Locale.getDefault(), "%02d:%02d", hourOfDay, minute);
+        // Drag handle bar
+        View handle = new View(this);
+        LinearLayout.LayoutParams handleLp = new LinearLayout.LayoutParams(100, 10);
+        handleLp.gravity = android.view.Gravity.CENTER_HORIZONTAL;
+        handleLp.setMargins(0, 0, 0, 30);
+        handle.setLayoutParams(handleLp);
+        handle.setBackgroundResource(R.drawable.bg_input_default);
+        root.addView(handle);
 
-                ProgressDialog progress = new ProgressDialog(this, ProgressDialog.THEME_HOLO_DARK);
-                progress.setMessage("Checking trainer availability...");
-                progress.setCancelable(false);
-                progress.show();
+        // Title
+        TextView tvTitle = new TextView(this);
+        tvTitle.setText("Book Personal Trainer");
+        tvTitle.setTextColor(Color.WHITE);
+        tvTitle.setTextSize(20);
+        tvTitle.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        tvTitle.setPadding(0, 0, 0, 20);
+        root.addView(tvTitle);
 
-                new Handler().postDelayed(() -> {
-                    progress.dismiss();
-                    currentMember.bookedTrainer = trainer.name;
-                    currentMember.bookedTime = selectedDate + " at " + selectedTime;
-                    currentMember.bookingStatus = "Pending";
-                    currentMember.notifications.add("Booked personal training slot with " + trainer.name);
-                    updateNotificationBadge();
-                    refreshHomeTab();
-                    setupProgramsTab(); // Refresh to show "Booked ✓"
+        // Trainer Details & Availability Card
+        LinearLayout cardTrainer = new LinearLayout(this);
+        cardTrainer.setOrientation(LinearLayout.VERTICAL);
+        cardTrainer.setBackgroundResource(R.drawable.bg_action_card);
+        cardTrainer.setPadding(24, 20, 24, 20);
 
-                    // Persist booking to Firestore
-                    if (currentMember.id != null && !currentMember.id.isEmpty()) {
-                        Map<String, Object> updates = new HashMap<>();
-                        updates.put("bookedTrainer", trainer.name);
-                        updates.put("bookedTime", selectedDate + " at " + selectedTime);
-                        updates.put("bookingStatus", "Pending");
+        // Header: Initials + Name + Specialization
+        LinearLayout headerRow = new LinearLayout(this);
+        headerRow.setOrientation(LinearLayout.HORIZONTAL);
+        headerRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
 
-                        db.collection("users").document(currentMember.id)
-                                .update(updates)
-                                .addOnSuccessListener(aVoid ->
-                                        Toast.makeText(this, "Trainer booked for " + currentMember.bookedTime, Toast.LENGTH_LONG).show())
-                                .addOnFailureListener(e ->
-                                        Toast.makeText(this, "Booking saved locally. Sync error: " + e.getMessage(), Toast.LENGTH_SHORT).show());
-                    } else {
-                        Toast.makeText(this, "Trainer booked for " + currentMember.bookedTime, Toast.LENGTH_LONG).show();
-                    }
+        FrameLayout avatar = new FrameLayout(this);
+        avatar.setLayoutParams(new LinearLayout.LayoutParams(spToPx(44), spToPx(44)));
+        avatar.setBackgroundResource(R.drawable.bg_icon_blue);
 
-                }, 1500);
+        TextView tvInitials = new TextView(this);
+        tvInitials.setLayoutParams(new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, android.view.Gravity.CENTER));
+        tvInitials.setText(trainer.getInitials());
+        tvInitials.setTextColor(Color.WHITE);
+        tvInitials.setTextSize(14);
+        tvInitials.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        avatar.addView(tvInitials);
+        headerRow.addView(avatar);
 
+        LinearLayout textCol = new LinearLayout(this);
+        textCol.setOrientation(LinearLayout.VERTICAL);
+        textCol.setPadding(24, 0, 0, 0);
+
+        TextView tvTrnName = new TextView(this);
+        tvTrnName.setText(trainer.name);
+        tvTrnName.setTextColor(Color.WHITE);
+        tvTrnName.setTextSize(16);
+        tvTrnName.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        textCol.addView(tvTrnName);
+
+        TextView tvTrnSpec = new TextView(this);
+        tvTrnSpec.setText(trainer.specialization + "  •  " + trainer.rating + " ★");
+        tvTrnSpec.setTextColor(Color.parseColor("#94A3B8"));
+        tvTrnSpec.setTextSize(13);
+        textCol.addView(tvTrnSpec);
+
+        headerRow.addView(textCol);
+        cardTrainer.addView(headerRow);
+
+        // Availability info box
+        TextView tvAvailability = new TextView(this);
+        String availStr = (trainer.availability != null && !trainer.availability.isEmpty())
+                ? trainer.availability : "Mon - Sat: 06:00 AM - 08:00 PM (Available)";
+        tvAvailability.setText("🟢 Availability:\n" + availStr);
+        tvAvailability.setTextColor(Color.parseColor("#34C759"));
+        tvAvailability.setTextSize(13);
+        tvAvailability.setPadding(0, 16, 0, 0);
+        cardTrainer.addView(tvAvailability);
+
+        root.addView(cardTrainer);
+
+        // Spacer
+        View spacer1 = new View(this);
+        spacer1.setLayoutParams(new LinearLayout.LayoutParams(1, 20));
+        root.addView(spacer1);
+
+        // Date selection field
+        TextView tvDateLabel = new TextView(this);
+        tvDateLabel.setText("SELECT SESSION DATE");
+        tvDateLabel.setTextColor(Color.parseColor("#94A3B8"));
+        tvDateLabel.setTextSize(11);
+        tvDateLabel.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        tvDateLabel.setPadding(0, 8, 0, 8);
+        root.addView(tvDateLabel);
+
+        final Calendar calendar = Calendar.getInstance();
+        final String[] chosenDate = {calendar.get(Calendar.DAY_OF_MONTH) + "/" + (calendar.get(Calendar.MONTH) + 1) + "/" + calendar.get(Calendar.YEAR)};
+
+        TextView tvDateInput = new TextView(this);
+        tvDateInput.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, spToPx(46)));
+        tvDateInput.setBackgroundResource(R.drawable.bg_input_selector);
+        tvDateInput.setPadding(24, 0, 24, 0);
+        tvDateInput.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        tvDateInput.setText("📅  Date: " + chosenDate[0]);
+        tvDateInput.setTextColor(Color.WHITE);
+        tvDateInput.setTextSize(14);
+        tvDateInput.setClickable(true);
+        tvDateInput.setFocusable(true);
+        root.addView(tvDateInput);
+
+        tvDateInput.setOnClickListener(v -> {
+            DatePickerDialog dpd = new DatePickerDialog(this, (view, year, month, dayOfMonth) -> {
+                chosenDate[0] = dayOfMonth + "/" + (month + 1) + "/" + year;
+                tvDateInput.setText("📅  Date: " + chosenDate[0]);
+            }, calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH), calendar.get(Calendar.DAY_OF_MONTH));
+            dpd.setTitle("Select Session Date");
+            dpd.show();
+        });
+
+        // Time selection field
+        TextView tvTimeLabel = new TextView(this);
+        tvTimeLabel.setText("SELECT SESSION TIME");
+        tvTimeLabel.setTextColor(Color.parseColor("#94A3B8"));
+        tvTimeLabel.setTextSize(11);
+        tvTimeLabel.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        tvTimeLabel.setPadding(0, 16, 0, 8);
+        root.addView(tvTimeLabel);
+
+        final String[] chosenTime = {String.format(Locale.getDefault(), "%02d:%02d", 10, 0)};
+
+        TextView tvTimeInput = new TextView(this);
+        tvTimeInput.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, spToPx(46)));
+        tvTimeInput.setBackgroundResource(R.drawable.bg_input_selector);
+        tvTimeInput.setPadding(24, 0, 24, 0);
+        tvTimeInput.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        tvTimeInput.setText("⏰  Time: " + chosenTime[0]);
+        tvTimeInput.setTextColor(Color.WHITE);
+        tvTimeInput.setTextSize(14);
+        tvTimeInput.setClickable(true);
+        tvTimeInput.setFocusable(true);
+        root.addView(tvTimeInput);
+
+        tvTimeInput.setOnClickListener(v -> {
+            TimePickerDialog tpd = new TimePickerDialog(this, (timeView, hourOfDay, minute) -> {
+                chosenTime[0] = String.format(Locale.getDefault(), "%02d:%02d", hourOfDay, minute);
+                tvTimeInput.setText("⏰  Time: " + chosenTime[0]);
             }, 10, 0, true);
-            timePickerDialog.show();
+            tpd.setTitle("Select Session Time");
+            tpd.show();
+        });
 
-        }, calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH), calendar.get(Calendar.DAY_OF_MONTH));
+        // Spacer
+        View spacer2 = new View(this);
+        spacer2.setLayoutParams(new LinearLayout.LayoutParams(1, 28));
+        root.addView(spacer2);
 
-        datePickerDialog.setTitle("Select Booking Date");
-        datePickerDialog.show();
+        // Confirm Booking Button
+        android.widget.Button btnConfirm = new android.widget.Button(this);
+        btnConfirm.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, spToPx(48)));
+        btnConfirm.setText("Confirm Trainer Booking");
+        btnConfirm.setTextColor(Color.WHITE);
+        btnConfirm.setTextSize(15);
+        btnConfirm.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        btnConfirm.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.parseColor("#34C759")));
+
+        btnConfirm.setOnClickListener(v -> {
+            dialog.dismiss();
+
+            ProgressDialog progress = new ProgressDialog(this, ProgressDialog.THEME_HOLO_DARK);
+            progress.setMessage("Checking trainer availability & confirming...");
+            progress.setCancelable(false);
+            progress.show();
+
+            new Handler().postDelayed(() -> {
+                progress.dismiss();
+
+                DocumentReference newDoc = db.collection("bookings").document();
+                Booking newBooking = new Booking(
+                        newDoc.getId(),
+                        currentMember.id != null ? currentMember.id : "",
+                        currentMember.name != null ? currentMember.name : "Member",
+                        currentMember.email != null ? currentMember.email : "",
+                        currentMember.phone != null ? currentMember.phone : "",
+                        trainer.id != null ? trainer.id : "",
+                        trainer.name != null ? trainer.name : "Trainer",
+                        trainer.email != null ? trainer.email : "",
+                        chosenDate[0] + " at " + chosenTime[0],
+                        "Pending"
+                );
+
+                currentMember.bookedTrainer = trainer.name;
+                currentMember.bookedTime = chosenDate[0] + " at " + chosenTime[0];
+                currentMember.bookingStatus = "Pending";
+                currentMember.notifications.add("Booked personal training slot with " + trainer.name);
+                updateNotificationBadge();
+
+                newDoc.set(newBooking)
+                        .addOnSuccessListener(aVoid ->
+                                Toast.makeText(this, "Trainer booked for " + newBooking.bookedTime, Toast.LENGTH_LONG).show())
+                        .addOnFailureListener(e ->
+                                Toast.makeText(this, "Booking saved locally. Sync error: " + e.getMessage(), Toast.LENGTH_SHORT).show());
+
+                if (currentMember.id != null && !currentMember.id.isEmpty()) {
+                    Map<String, Object> updates = new HashMap<>();
+                    updates.put("bookedTrainer", trainer.name);
+                    updates.put("bookedTime", chosenDate[0] + " at " + chosenTime[0]);
+                    updates.put("bookingStatus", "Pending");
+                    db.collection("users").document(currentMember.id).update(updates);
+                }
+            }, 1500);
+        });
+
+        root.addView(btnConfirm);
+
+        dialog.setContentView(root);
+        dialog.show();
     }
 
     // Helper conversion

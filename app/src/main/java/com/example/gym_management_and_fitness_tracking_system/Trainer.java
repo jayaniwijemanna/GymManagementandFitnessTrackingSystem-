@@ -10,6 +10,7 @@ public class Trainer {
     public String role = "trainer";
     public java.util.List<String> feedback = new java.util.ArrayList<>();
     public String rating = "5.0";
+    public String availability = "Mon - Sat: 06:00 AM - 08:00 PM (Available)";
 
     // Required empty constructor for Firestore deserialization
     public Trainer() {}
