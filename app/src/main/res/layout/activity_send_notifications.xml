@@ -25,15 +25,37 @@
             android:clickable="true"
             android:focusable="true"/>
 
-        <TextView
+        <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:fontFamily="sans-serif-bold"
-            android:text="Send Notification"
-            android:textColor="@color/text_white"
-            android:textSize="22sp"
-            android:textStyle="bold" />
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Send Announcement"
+                android:textColor="@color/text_white"
+                android:textSize="22sp"
+                android:fontFamily="sans-serif-bold"
+                android:textStyle="bold"/>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Broadcast to members &amp; trainers"
+                android:textColor="@color/text_gray"
+                android:textSize="13sp"
+                android:layout_marginTop="2dp"/>
+        </LinearLayout>
+
+        <!-- Megaphone icon -->
+        <ImageView
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:src="@drawable/ic_notification"
+            android:tint="@color/primary"
+            android:contentDescription="Announcement"/>
     </LinearLayout>
 
     <ScrollView
@@ -48,69 +70,127 @@
             android:orientation="vertical"
             android:paddingHorizontal="20dp"
             android:paddingBottom="20dp">
-            
+
+            <!-- Info Banner -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_input_default"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:paddingHorizontal="16dp"
+                android:paddingVertical="14dp"
+                android:layout_marginBottom="24dp">
+
+                <ImageView
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:src="@drawable/ic_notification"
+                    android:tint="@color/primary"
+                    android:layout_marginEnd="12dp"
+                    android:contentDescription="Info"/>
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Announcements are delivered to all users in the selected audience group."
+                    android:textColor="@color/text_gray"
+                    android:textSize="13sp"
+                    android:lineSpacingMultiplier="1.3"/>
+            </LinearLayout>
+
+            <!-- Target Audience -->
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Target Audience"
                 android:textColor="@color/text_gray"
-                android:textSize="14sp"
+                android:textSize="13sp"
+                android:letterSpacing="0.05"
                 android:layout_marginBottom="8dp"/>
-                
+
             <Spinner
                 android:id="@+id/spinner_audience"
                 android:layout_width="match_parent"
-                android:layout_height="50dp"
+                android:layout_height="52dp"
                 android:background="@drawable/bg_input_default"
                 android:paddingHorizontal="16dp"
-                android:layout_marginBottom="16dp"/>
-                
+                android:layout_marginBottom="20dp"/>
+
+            <!-- Announcement Title -->
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Title"
+                android:text="Announcement Title"
                 android:textColor="@color/text_gray"
-                android:textSize="14sp"
+                android:textSize="13sp"
+                android:letterSpacing="0.05"
                 android:layout_marginBottom="8dp"/>
-                
+
             <EditText
                 android:id="@+id/et_notif_title"
                 android:layout_width="match_parent"
-                android:layout_height="50dp"
+                android:layout_height="52dp"
                 android:background="@drawable/bg_input_default"
-                android:hint="Announcement"
+                android:hint="e.g. Gym Schedule Change"
                 android:textColorHint="@color/text_hint"
                 android:textColor="@color/white"
+                android:textSize="15sp"
                 android:paddingHorizontal="16dp"
-                android:layout_marginBottom="16dp"/>
-                
+                android:layout_marginBottom="20dp"/>
+
+            <!-- Announcement Message -->
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Message"
+                android:text="Announcement Message"
                 android:textColor="@color/text_gray"
-                android:textSize="14sp"
+                android:textSize="13sp"
+                android:letterSpacing="0.05"
                 android:layout_marginBottom="8dp"/>
-                
+
             <EditText
                 android:id="@+id/et_notif_message"
                 android:layout_width="match_parent"
-                android:layout_height="120dp"
+                android:layout_height="140dp"
                 android:background="@drawable/bg_input_default"
-                android:hint="Type your message here..."
+                android:hint="Write your announcement here..."
                 android:gravity="top|start"
                 android:inputType="textMultiLine"
                 android:textColorHint="@color/text_hint"
                 android:textColor="@color/white"
+                android:textSize="15sp"
                 android:padding="16dp"
-                android:layout_marginBottom="24dp"/>
-                
+                android:layout_marginBottom="28dp"/>
+
+            <!-- Progress & Status -->
+            <ProgressBar
+                android:id="@+id/progress_send"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_horizontal"
+                android:indeterminateTint="@color/primary"
+                android:visibility="gone"
+                android:layout_marginBottom="12dp"/>
+
+            <TextView
+                android:id="@+id/tv_send_status"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:layout_marginBottom="12dp"
+                android:visibility="gone"/>
+
+            <!-- Send Button -->
             <Button
                 android:id="@+id/btn_send_notification"
                 android:layout_width="match_parent"
-                android:layout_height="55dp"
+                android:layout_height="56dp"
                 android:backgroundTint="@color/primary"
-                android:text="Send Notification"
+                android:text="Send Announcement"
                 android:textColor="@color/white"
                 android:textSize="16sp"
                 android:textStyle="bold"
@@ -120,3 +200,4 @@
     </ScrollView>
 
 </LinearLayout>
+

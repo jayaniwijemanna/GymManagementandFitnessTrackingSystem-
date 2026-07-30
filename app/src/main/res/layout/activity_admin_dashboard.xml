@@ -584,7 +584,7 @@
                 android:layout_width="12dp"
                 android:layout_height="1dp" />
 
-            <!-- Action: Send Notifications -->
+            <!-- Action: Send Announcements -->
             <LinearLayout
                 android:id="@+id/action_notifications"
                 android:layout_width="0dp"
@@ -606,7 +606,7 @@
                         android:layout_width="20dp"
                         android:layout_height="20dp"
                         android:layout_gravity="center"
-                        android:contentDescription="Notifications"
+                        android:contentDescription="Announcements"
                         android:src="@drawable/ic_notification"
                         android:tint="@color/white" />
                 </FrameLayout>
@@ -616,7 +616,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="12dp"
                     android:fontFamily="sans-serif-bold"
-                    android:text="Send\nNotifications"
+                    android:text="Send\nAnnouncements"
                     android:textColor="@color/text_white"
                     android:textSize="14sp"
                     android:textStyle="bold" />
@@ -626,7 +626,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
                     android:fontFamily="sans-serif"
-                    android:text="Alert Members"
+                    android:text="Broadcast to\nAll Users"
                     android:textColor="@color/text_gray"
                     android:textSize="11sp" />
             </LinearLayout>
