@@ -66,7 +66,6 @@ public class MemberDashboardActivity extends AppCompatActivity {
     private ListenerRegistration packagesListener;
     private ListenerRegistration trainersListener;
     private ListenerRegistration bookingsListener;
-    private ListenerRegistration notificationsListener;
     private final List<Booking> memberBookings = new ArrayList<>();
 
     // QR Scanner launcher
@@ -188,13 +187,13 @@ public class MemberDashboardActivity extends AppCompatActivity {
                             Member m = snapshot.toObject(Member.class);
                             if (m != null) {
                                 m.id = snapshot.getId();
-                                // Preserve runtime-only fields (notifications, waterIntake) if member already loaded
+                                // Preserve waterIntake and weightHistory if needed
                                 if (currentMember != null) {
-                                    m.notifications = currentMember.notifications;
                                     m.waterIntake = currentMember.waterIntake;
                                     m.weightHistory = currentMember.weightHistory;
                                 }
                                 currentMember = m;
+                                updateNotificationBadge();
                                 // Update DataStore reference
                                 syncMemberToDataStore(m);
                                 onMemberLoaded();
@@ -284,12 +283,11 @@ public class MemberDashboardActivity extends AppCompatActivity {
                     Member m = snapshot.toObject(Member.class);
                     if (m != null) {
                         m.id = snapshot.getId();
-                        // Preserve runtime-only transient fields
                         if (currentMember != null) {
-                            m.notifications = currentMember.notifications;
                             m.waterIntake = currentMember.waterIntake;
                         }
                         currentMember = m;
+                        updateNotificationBadge();
                         syncMemberToDataStore(m);
                         // Refresh UI if already initialized
                         refreshHomeTab();
@@ -319,12 +317,12 @@ public class MemberDashboardActivity extends AppCompatActivity {
         setupHeader();
         if (currentMember != null && currentMember.id != null && !currentMember.id.isEmpty()) {
             listenToBookingsRealtime(currentMember.id);
-            listenToBookingNotificationsRealtime(currentMember.id);
         }
         refreshHomeTab();
         setupProgramsTab();
         setupFitnessTab();
         setupFeedbackTab();
+        updateNotificationBadge();
     }
 
     /**
@@ -382,17 +380,6 @@ public class MemberDashboardActivity extends AppCompatActivity {
                 });
     }
 
-    @Override
-    protected void onDestroy() {
-        super.onDestroy();
-        // Clean up Firestore listeners to avoid memory leaks
-        if (memberListener != null) memberListener.remove();
-        if (packagesListener != null) packagesListener.remove();
-        if (trainersListener != null) trainersListener.remove();
-        if (bookingsListener != null) bookingsListener.remove();
-        if (notificationsListener != null) notificationsListener.remove();
-    }
-
     private void listenToBookingsRealtime(String memberId) {
         if (TextUtils.isEmpty(memberId)) return;
         if (bookingsListener != null) bookingsListener.remove();
@@ -417,38 +404,14 @@ public class MemberDashboardActivity extends AppCompatActivity {
                 });
     }
 
-    /**
-     * Real-time listener for the 'notifications' Firestore collection, filtered by memberId.
-     * Surfaces new booking-status notifications (Approved / Declined) to the member's bell icon.
-     */
-    private void listenToBookingNotificationsRealtime(String memberId) {
-        if (TextUtils.isEmpty(memberId)) return;
-        if (notificationsListener != null) notificationsListener.remove();
-
-        notificationsListener = db.collection("notifications")
-                .whereEqualTo("memberId", memberId)
-                .whereEqualTo("read", false)
-                .addSnapshotListener((value, error) -> {
-                    if (error != null || value == null) return;
-                    for (DocumentSnapshot doc : value.getDocuments()) {
-                        String title   = doc.getString("title");
-                        String message = doc.getString("message");
-                        if (message == null || message.isEmpty()) continue;
-
-                        String fullMsg = (title != null && !title.isEmpty())
-                                ? title + ": " + message
-                                : message;
-
-                        // Add to in-memory notification list if not already present
-                        if (currentMember != null && !currentMember.notifications.contains(fullMsg)) {
-                            currentMember.notifications.add(fullMsg);
-                            updateNotificationBadge();
-                        }
-
-                        // Mark as read in Firestore so it's not surfaced again
-                        doc.getReference().update("read", true);
-                    }
-                });
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        // Clean up Firestore listeners to avoid memory leaks
+        if (memberListener != null) memberListener.remove();
+        if (packagesListener != null) packagesListener.remove();
+        if (trainersListener != null) trainersListener.remove();
+        if (bookingsListener != null) bookingsListener.remove();
     }
 
     // ==================== VIEW INITIALIZATION ====================
@@ -583,7 +546,13 @@ public class MemberDashboardActivity extends AppCompatActivity {
         }
 
         builder.setPositiveButton("Clear All", (dialog, which) -> {
-            if (currentMember != null) currentMember.notifications.clear();
+            if (currentMember != null) {
+                currentMember.notifications.clear();
+                if (currentMember.id != null && !currentMember.id.isEmpty()) {
+                    db.collection("users").document(currentMember.id)
+                            .update("notifications", new ArrayList<String>());
+                }
+            }
             updateNotificationBadge();
             Toast.makeText(this, "Notifications cleared", Toast.LENGTH_SHORT).show();
         });
