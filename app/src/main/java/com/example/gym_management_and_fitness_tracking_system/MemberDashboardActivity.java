@@ -5,6 +5,7 @@ import android.app.DatePickerDialog;
 import android.app.ProgressDialog;
 import android.app.TimePickerDialog;
 import android.content.Intent;
+import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.os.Handler;
@@ -26,6 +27,9 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.activity.EdgeToEdge;
+import androidx.activity.result.ActivityResult;
+import androidx.activity.result.ActivityResultCallback;
+import androidx.activity.result.ActivityResultLauncher;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
@@ -38,6 +42,9 @@ import com.google.firebase.firestore.DocumentReference;
 import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.ListenerRegistration;
+
+import com.journeyapps.barcodescanner.ScanContract;
+import com.journeyapps.barcodescanner.ScanOptions;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -59,8 +66,11 @@ public class MemberDashboardActivity extends AppCompatActivity {
     private ListenerRegistration packagesListener;
     private ListenerRegistration trainersListener;
     private ListenerRegistration bookingsListener;
-
     private final List<Booking> memberBookings = new ArrayList<>();
+
+    // QR Scanner launcher
+    private ActivityResultLauncher<ScanOptions> qrScanLauncher;
+    private Runnable qrScanSuccessCallback;
 
     // Local list references from DataStore (kept in sync by Firestore listeners)
     private final List<GymPackage> packageList = DataStore.getInstance().packages;
@@ -126,6 +136,23 @@ public class MemberDashboardActivity extends AppCompatActivity {
 
         db = FirebaseFirestore.getInstance();
         mAuth = FirebaseAuth.getInstance();
+
+        // Register ZXing QR scanner result launcher
+        qrScanLauncher = registerForActivityResult(new ScanContract(), result -> {
+            if (result.getContents() != null) {
+                String scannedContent = result.getContents().trim();
+                if ("TITAN_GYM_ATTENDANCE_CHECKIN_ENTRANCE_QR_2026".equals(scannedContent)
+                        || "TITAN-ENTRANCE-2026".equals(scannedContent)) {
+                    if (qrScanSuccessCallback != null) {
+                        qrScanSuccessCallback.run();
+                    }
+                } else {
+                    Toast.makeText(this, "❌ Invalid QR Code. Please scan the official Titan Gym Entrance QR.", Toast.LENGTH_LONG).show();
+                }
+            } else {
+                Toast.makeText(this, "Scan cancelled.", Toast.LENGTH_SHORT).show();
+            }
+        });
 
         initializeViews();
         setupNavigation();
@@ -771,65 +798,274 @@ public class MemberDashboardActivity extends AppCompatActivity {
     }
 
     private void triggerCheckinFlow() {
-        // Show simulated QR scanner dialog
-        AlertDialog.Builder builder = new AlertDialog.Builder(this, AlertDialog.THEME_HOLO_DARK);
-        LayoutInflater inflater = getLayoutInflater();
+        BottomSheetDialog dialog = new BottomSheetDialog(this);
 
-        // Dynamically construct a premium scan dialog
-        View scanLayout = inflater.inflate(R.layout.activity_verify_otp, null);
-        TextView header = scanLayout.findViewById(R.id.title_titan_gym);
-        header.setText("QR SCANNER");
-        TextView inst = scanLayout.findViewById(R.id.tv_otp_instructions);
-        inst.setText("Align gym QR code within the frame to check in.");
+        LinearLayout root = new LinearLayout(this);
 
-        // Replace input box with scan line simulation
-        LinearLayout inputGroup = (LinearLayout) scanLayout.findViewById(R.id.et_otp).getParent();
-        inputGroup.removeAllViews();
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setPadding(40, 24, 40, 40);
+        root.setBackgroundResource(R.drawable.bg_bottom_sheet);
+        root.setGravity(android.view.Gravity.CENTER_HORIZONTAL);
 
-        TextView scanAnim = new TextView(this);
-        scanAnim.setText("[ SCANNING CAMERA VIEW ]\n\n════════════════════");
-        scanAnim.setTextColor(Color.parseColor("#34C759"));
-        scanAnim.setGravity(android.view.Gravity.CENTER);
-        scanAnim.setPadding(0, 30, 0, 30);
-        inputGroup.addView(scanAnim);
+        View handle = new View(this);
+        LinearLayout.LayoutParams handleLp = new LinearLayout.LayoutParams(100, 10);
+        handleLp.setMargins(0, 0, 0, 24);
+        handle.setLayoutParams(handleLp);
+        handle.setBackgroundResource(R.drawable.bg_input_default);
+        root.addView(handle);
 
-        TextView note = scanLayout.findViewById(R.id.tv_cancel);
-        note.setText("Searching for camera sensor...");
-        note.setTextColor(Color.parseColor("#94A3B8"));
+        TextView title = new TextView(this);
+        title.setText("GYM ENTRANCE QR SCANNER");
+        title.setTextColor(Color.WHITE);
+        title.setTextSize(16);
+        title.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        title.setGravity(android.view.Gravity.CENTER);
+        root.addView(title);
 
-        // Hide verify button
-        scanLayout.findViewById(R.id.btn_verify).setVisibility(View.GONE);
+        TextView inst = new TextView(this);
+        inst.setText("Point camera at gym QR code and tap 'Scan QR' to detect.");
+        inst.setTextColor(Color.parseColor("#94A3B8"));
+        inst.setTextSize(13);
+        inst.setGravity(android.view.Gravity.CENTER);
+        inst.setPadding(0, 6, 0, 18);
+        root.addView(inst);
 
-        builder.setView(scanLayout);
-        AlertDialog dialog = builder.create();
-        dialog.show();
+        // QR Viewfinder Simulation Frame
+        FrameLayout cameraFrame = new FrameLayout(this);
+        LinearLayout.LayoutParams frameLp = new LinearLayout.LayoutParams(spToPx(240), spToPx(130));
+        frameLp.setMargins(0, 0, 0, 16);
+        cameraFrame.setLayoutParams(frameLp);
+        cameraFrame.setBackgroundResource(R.drawable.bg_input_selector);
 
-        // Simulate laser scanner and successful scan in 2 seconds
-        new Handler().postDelayed(() -> {
-            if (dialog.isShowing()) {
-                dialog.dismiss();
+        TextView tvFrameText = new TextView(this);
+        tvFrameText.setText("📷 CAMERA VIEWFINDER\n\n[ Ready - Tap 'Scan QR' Below ]");
+        tvFrameText.setTextColor(Color.parseColor("#94A3B8"));
+        tvFrameText.setGravity(android.view.Gravity.CENTER);
+        tvFrameText.setLayoutParams(new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        cameraFrame.addView(tvFrameText);
+        root.addView(cameraFrame);
 
-                // Set present checked-in time
+        // QR Code Scanned Output Field (Empty by default)
+        EditText etQrCode = new EditText(this);
+        etQrCode.setHint("Scanned QR Code (e.g. TITAN-ENTRANCE-2026)");
+        etQrCode.setText("");
+        etQrCode.setTextColor(Color.WHITE);
+        etQrCode.setHintTextColor(Color.parseColor("#64748B"));
+        etQrCode.setBackgroundResource(R.drawable.bg_input_selector);
+        etQrCode.setPadding(30, 22, 30, 22);
+        etQrCode.setTextSize(14);
+        LinearLayout.LayoutParams etLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        etLp.setMargins(0, 0, 0, 16);
+        etQrCode.setLayoutParams(etLp);
+        root.addView(etQrCode);
+
+        // Button 1: Camera Scan Action
+        LinearLayout btnCameraScan = new LinearLayout(this);
+        btnCameraScan.setOrientation(LinearLayout.HORIZONTAL);
+        btnCameraScan.setGravity(android.view.Gravity.CENTER);
+        btnCameraScan.setBackgroundResource(R.drawable.bg_button_selector);
+        btnCameraScan.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.parseColor("#1E293B")));
+        btnCameraScan.setPadding(0, 24, 0, 24);
+        btnCameraScan.setClickable(true);
+        btnCameraScan.setFocusable(true);
+
+        TextView tvCameraScanText = new TextView(this);
+        tvCameraScanText.setText("📷  SCAN QR WITH CAMERA");
+        tvCameraScanText.setTextColor(Color.parseColor("#38BDF8"));
+        tvCameraScanText.setTextSize(14);
+        tvCameraScanText.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        btnCameraScan.addView(tvCameraScanText);
+        root.addView(btnCameraScan);
+
+        // Button 2: Submit Attendance
+        LinearLayout btnScanConfirm = new LinearLayout(this);
+        btnScanConfirm.setOrientation(LinearLayout.HORIZONTAL);
+        btnScanConfirm.setGravity(android.view.Gravity.CENTER);
+        btnScanConfirm.setBackgroundResource(R.drawable.bg_button_selector);
+        btnScanConfirm.setPadding(0, 26, 0, 26);
+        btnScanConfirm.setClickable(true);
+        btnScanConfirm.setFocusable(true);
+        LinearLayout.LayoutParams btnLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        btnLp.setMargins(0, 12, 0, 0);
+        btnScanConfirm.setLayoutParams(btnLp);
+
+        TextView tvBtnText = new TextView(this);
+        tvBtnText.setText("✓  MARK ATTENDANCE");
+        tvBtnText.setTextColor(Color.WHITE);
+        tvBtnText.setTextSize(15);
+        tvBtnText.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        btnScanConfirm.addView(tvBtnText);
+        root.addView(btnScanConfirm);
+
+        // STATE FLAG: Only true after camera physically scans and returns valid code
+        final boolean[] qrScanned = {false};
+
+        // Camera Scan Button Action — opens REAL device camera via ZXing
+        btnCameraScan.setOnClickListener(v -> {
+            // Set callback: runs on successful QR detection
+            qrScanSuccessCallback = () -> {
+                qrScanned[0] = true;
+                etQrCode.setText("TITAN-ENTRANCE-2026");
+                etQrCode.setFocusable(false);
+                etQrCode.setFocusableInTouchMode(false);
+                tvFrameText.setText("✅ QR CODE VERIFIED!\n\n[ Titan Gym Entrance ]");
+                tvFrameText.setTextColor(Color.parseColor("#34C759"));
+                tvBtnText.setText("✓  MARK ATTENDANCE");
+                tvBtnText.setTextColor(Color.parseColor("#34C759"));
+                tvCameraScanText.setText("📷  Re-Scan QR");
+                Toast.makeText(this, "✅ QR Verified! Tap 'Mark Attendance' to confirm.", Toast.LENGTH_SHORT).show();
+            };
+
+            // Launch real camera scanner — locked to portrait, QR_CODE only for instant detection
+            ScanOptions options = new ScanOptions();
+            options.setPrompt("Point camera at Titan Gym QR Code to check in");
+            options.setBeepEnabled(true);
+            options.setOrientationLocked(true);           // lock to portrait, no rotation
+            options.setBarcodeImageEnabled(false);         // faster, no image capture
+            options.setDesiredBarcodeFormats(ScanOptions.QR_CODE); // QR only = faster focus
+            qrScanLauncher.launch(options);
+        });
+
+
+        // Submit Attendance Button Action — BLOCKED until qrScanned == true
+        btnScanConfirm.setOnClickListener(v -> {
+            if (!qrScanned[0]) {
+                Toast.makeText(this, "❌ Please scan the Gym QR Code first before marking attendance!", Toast.LENGTH_LONG).show();
+                return;
+            }
+
+            dialog.dismiss();
+
+            ProgressDialog progress = new ProgressDialog(this, ProgressDialog.THEME_HOLO_DARK);
+            progress.setMessage("Validating QR Code & marking attendance...");
+            progress.setCancelable(false);
+            progress.show();
+
+            new Handler().postDelayed(() -> {
+                progress.dismiss();
+
+                // Format current time and date
                 SimpleDateFormat sdf = new SimpleDateFormat("hh:mm a", Locale.getDefault());
                 String checkinTime = sdf.format(new Date());
-                currentMember.checkedInTime = checkinTime;
-                currentMember.notifications.add("Checked in successfully at " + checkinTime);
-                updateNotificationBadge();
-                refreshHomeTab();
 
-                // Persist check-in to Firestore
-                if (currentMember.id != null && !currentMember.id.isEmpty()) {
-                    db.collection("users").document(currentMember.id)
-                            .update("checkedInTime", checkinTime)
-                            .addOnFailureListener(e ->
-                                    Toast.makeText(this, "Check-in saved locally only.", Toast.LENGTH_SHORT).show());
+                Calendar cal = Calendar.getInstance();
+                int day = cal.get(Calendar.DAY_OF_MONTH);
+                int month = cal.get(Calendar.MONTH) + 1;
+                int year = cal.get(Calendar.YEAR);
+                String dateStr1 = day + "/" + month + "/" + year;
+                String dateStr2 = String.format(Locale.getDefault(), "%02d/%02d/%d", day, month, year);
+
+                // Check for bookings matching today's date
+                int matchedBookingsCount = 0;
+                for (Booking b : memberBookings) {
+                    if (b.bookedTime != null && ("Pending".equalsIgnoreCase(b.status) || "Accepted".equalsIgnoreCase(b.status))) {
+                        if (b.bookedTime.contains(dateStr1) || b.bookedTime.contains(dateStr2)) {
+                            b.status = "Attended";
+                            matchedBookingsCount++;
+                            if (b.id != null && !b.id.isEmpty()) {
+                                db.collection("bookings").document(b.id).update("status", "Attended");
+                            }
+                        }
+                    }
                 }
 
-                Toast.makeText(this, "Gym Check-in Successful! Welcome to Titan.", Toast.LENGTH_LONG).show();
-            }
-        }, 2200);
+                currentMember.checkedInTime = checkinTime;
+                String notifMsg = matchedBookingsCount > 0
+                        ? "Checked in at " + checkinTime + " • Marked " + matchedBookingsCount + " booking(s) as Attended!"
+                        : "Checked in successfully at " + checkinTime;
+                currentMember.notifications.add(notifMsg);
+                updateNotificationBadge();
 
-        scanLayout.findViewById(R.id.tv_cancel).setOnClickListener(v -> dialog.dismiss());
+                // Persist check-in to Firestore users document
+                if (currentMember.id != null && !currentMember.id.isEmpty()) {
+                    db.collection("users").document(currentMember.id)
+                            .update("checkedInTime", checkinTime);
+                }
+
+                // Write attendance document to Firestore 'attendance' collection
+                Map<String, Object> attDoc = new HashMap<>();
+                attDoc.put("memberId", currentMember.id != null ? currentMember.id : "");
+                attDoc.put("memberName", currentMember.name != null ? currentMember.name : "Member");
+                attDoc.put("memberEmail", currentMember.email != null ? currentMember.email : "");
+                attDoc.put("checkInTime", checkinTime);
+                attDoc.put("date", dateStr1);
+                attDoc.put("matchedBookingsCount", matchedBookingsCount);
+                attDoc.put("status", "Present");
+                attDoc.put("timestamp", com.google.firebase.Timestamp.now());
+
+                db.collection("attendance").add(attDoc);
+
+                refreshHomeTab();
+                setupProgramsTab();
+                setupBookingsTab();
+
+                if (matchedBookingsCount > 0) {
+                    Toast.makeText(this, "Attendance Marked! " + matchedBookingsCount + " session booking(s) marked Attended.", Toast.LENGTH_LONG).show();
+                } else {
+                    Toast.makeText(this, "Attendance Marked! Checked in at " + checkinTime, Toast.LENGTH_LONG).show();
+                }
+            }, 1000);
+        });
+
+        dialog.setContentView(root);
+        dialog.show();
+    }
+
+    private void showMyMemberPassQrDialog() {
+        if (currentMember == null) return;
+        BottomSheetDialog dialog = new BottomSheetDialog(this);
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setPadding(40, 24, 40, 40);
+        root.setBackgroundResource(R.drawable.bg_bottom_sheet);
+        root.setGravity(android.view.Gravity.CENTER_HORIZONTAL);
+
+        View handle = new View(this);
+        LinearLayout.LayoutParams handleLp = new LinearLayout.LayoutParams(100, 10);
+        handleLp.setMargins(0, 0, 0, 30);
+        handle.setLayoutParams(handleLp);
+        handle.setBackgroundResource(R.drawable.bg_input_default);
+        root.addView(handle);
+
+        TextView title = new TextView(this);
+        title.setText("MEMBER GYM PASS QR CODE");
+        title.setTextColor(Color.WHITE);
+        title.setTextSize(16);
+        title.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        title.setGravity(android.view.Gravity.CENTER);
+        root.addView(title);
+
+        TextView sub = new TextView(this);
+        sub.setText("Member: " + currentMember.name + " (" + (currentMember.plan != null ? currentMember.plan : "Standard") + ")\nScan at gym entrance or turnstile to mark attendance.");
+        sub.setTextColor(Color.parseColor("#94A3B8"));
+        sub.setTextSize(13);
+        sub.setGravity(android.view.Gravity.CENTER);
+        sub.setPadding(0, 6, 0, 24);
+        root.addView(sub);
+
+        ImageView imgQr = new ImageView(this);
+        int qrSize = spToPx(240);
+        LinearLayout.LayoutParams imgLp = new LinearLayout.LayoutParams(qrSize, qrSize);
+        imgQr.setLayoutParams(imgLp);
+
+        String qrPayload = "TITAN_MEMBER_PASS:" + (currentMember.id != null ? currentMember.id : "MEM_001") + "|" + currentMember.name;
+        Bitmap qrBmp = QrGenerator.generateQrBitmap(qrPayload, 500);
+        imgQr.setImageBitmap(qrBmp);
+        root.addView(imgQr);
+
+        TextView codeText = new TextView(this);
+        codeText.setText("Member ID: " + (currentMember.id != null ? currentMember.id : "TITAN-MEM-001"));
+        codeText.setTextColor(Color.parseColor("#34C759"));
+        codeText.setTextSize(13);
+        codeText.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        codeText.setPadding(0, 20, 0, 0);
+        root.addView(codeText);
+
+        dialog.setContentView(root);
+        dialog.show();
     }
 
     // ==================== TAB 2: PROGRAMS & BOOKING ====================
