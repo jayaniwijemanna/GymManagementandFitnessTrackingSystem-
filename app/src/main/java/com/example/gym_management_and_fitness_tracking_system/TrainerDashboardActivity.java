@@ -288,6 +288,9 @@ public class TrainerDashboardActivity extends AppCompatActivity {
                             }
                         }
                         refreshMembersTab();
+                        setupPlansTab();
+                        setupProgressTab();
+                        setupReviewsChatTab();
                     }
                 });
     }
@@ -610,38 +613,44 @@ public class TrainerDashboardActivity extends AppCompatActivity {
     }
 
     /**
-     * Push a notification document to the Firestore 'notifications' collection.
-     * MemberDashboardActivity listens to this collection and surfaces it to the user.
+     * Appends a notification string directly into the member's user document in the 'users' collection.
+     * The member's live snapshot listener will receive this automatically and display the bell alert.
      */
     private void pushNotificationToMember(String memberId, String memberName, String title, String message) {
-        Map<String, Object> notif = new HashMap<>();
-        notif.put("memberId", memberId);
-        notif.put("memberName", memberName != null ? memberName : "");
-        notif.put("title", title);
-        notif.put("message", message);
-        notif.put("type", "booking_status");
-        notif.put("trainerName", currentTrainer != null ? currentTrainer.name : "");
-        notif.put("read", false);
-        notif.put("timestamp", com.google.firebase.Timestamp.now());
+        if (TextUtils.isEmpty(memberId)) return;
 
-        db.collection("notifications").add(notif)
-                .addOnSuccessListener(ref -> {
-                    // Also append a quick in-app notification message to the member's user document
-                    // so that even if real-time listener catches it, the dashboard badge updates
-                    if (memberId != null && !memberId.isEmpty()) {
-                        db.collection("users").document(memberId)
-                                .update("lastNotification", message);
-                    }
-                })
+        String notifMsg = title + " • " + message;
+
+        db.collection("users").document(memberId)
+                .update("notifications", com.google.firebase.firestore.FieldValue.arrayUnion(notifMsg))
                 .addOnFailureListener(e -> {
-                    // Non-critical — booking status already updated
+                    // Fallback if notifications field was absent
+                    Map<String, Object> map = new HashMap<>();
+                    map.put("notifications", java.util.Arrays.asList(notifMsg));
+                    db.collection("users").document(memberId)
+                            .set(map, com.google.firebase.firestore.SetOptions.merge());
                 });
     }
 
     private List<Member> getAssignedMembers() {
         List<Member> list = new ArrayList<>();
+        if (currentTrainer == null) return list;
+
         for (Member m : DataStore.getInstance().members) {
+            boolean isAssigned = false;
             if (m.bookedTrainer != null && m.bookedTrainer.equalsIgnoreCase(currentTrainer.name)) {
+                isAssigned = true;
+            } else {
+                for (Booking b : trainerBookings) {
+                    if ("Accepted".equalsIgnoreCase(b.status)
+                            && ((b.memberId != null && b.memberId.equalsIgnoreCase(m.id))
+                            || (b.memberEmail != null && m.email != null && b.memberEmail.equalsIgnoreCase(m.email)))) {
+                        isAssigned = true;
+                        break;
+                    }
+                }
+            }
+            if (isAssigned) {
                 list.add(m);
             }
         }
@@ -710,7 +719,12 @@ public class TrainerDashboardActivity extends AppCompatActivity {
             if (pos >= 0 && pos < assigned.size()) {
                 Member m = assigned.get(pos);
                 m.workoutPlan = etWorkoutPlan.getText().toString().trim();
-                m.notifications.add("Trainer " + currentTrainer.name + " updated your Workout Plan.");
+                String notif = "Trainer " + currentTrainer.name + " updated your Workout Plan.";
+                if (m.id != null && !m.id.isEmpty()) {
+                    db.collection("users").document(m.id)
+                            .update("workoutPlan", m.workoutPlan,
+                                    "notifications", com.google.firebase.firestore.FieldValue.arrayUnion(notif));
+                }
                 Toast.makeText(this, "Workout plan updated for " + m.name, Toast.LENGTH_SHORT).show();
             }
         });
@@ -720,7 +734,12 @@ public class TrainerDashboardActivity extends AppCompatActivity {
             if (pos >= 0 && pos < assigned.size()) {
                 Member m = assigned.get(pos);
                 m.dietPlan = etDietPlan.getText().toString().trim();
-                m.notifications.add("Trainer " + currentTrainer.name + " updated your Diet Plan.");
+                String notif = "Trainer " + currentTrainer.name + " updated your Diet Plan.";
+                if (m.id != null && !m.id.isEmpty()) {
+                    db.collection("users").document(m.id)
+                            .update("dietPlan", m.dietPlan,
+                                    "notifications", com.google.firebase.firestore.FieldValue.arrayUnion(notif));
+                }
                 Toast.makeText(this, "Diet plan updated for " + m.name, Toast.LENGTH_SHORT).show();
             }
         });
