@@ -9,6 +9,7 @@ public class Trainer {
     public String password = "password";
     public String role = "trainer";
     public java.util.List<String> feedback = new java.util.ArrayList<>();
+    public java.util.List<String> notifications = new java.util.ArrayList<>();
     public String rating = "5.0";
     public String availability = "Mon - Sat: 06:00 AM - 08:00 PM (Available)";
 

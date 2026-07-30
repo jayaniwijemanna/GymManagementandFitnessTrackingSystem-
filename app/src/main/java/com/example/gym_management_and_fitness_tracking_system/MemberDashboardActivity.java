@@ -1866,6 +1866,13 @@ public class MemberDashboardActivity extends AppCompatActivity {
                     updates.put("bookingStatus", "Pending");
                     db.collection("users").document(currentMember.id).update(updates);
                 }
+
+                // Push real-time notification to the trainer's user document in Firestore
+                if (trainer.id != null && !trainer.id.isEmpty()) {
+                    String trainerNotif = "📅 New booking request from " + currentMember.name + " for " + chosenDate[0] + " at " + chosenTime[0];
+                    db.collection("users").document(trainer.id)
+                            .update("notifications", com.google.firebase.firestore.FieldValue.arrayUnion(trainerNotif));
+                }
             }, 1500);
         });
 
