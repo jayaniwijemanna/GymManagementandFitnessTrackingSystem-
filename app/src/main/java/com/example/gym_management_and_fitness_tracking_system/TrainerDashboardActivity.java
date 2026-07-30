@@ -288,19 +288,83 @@ public class TrainerDashboardActivity extends AppCompatActivity {
     }
 
     private void showTrainerNotificationsDialog() {
-        viewNotificationBadge.setVisibility(View.GONE);
+        if (viewNotificationBadge != null) viewNotificationBadge.setVisibility(View.GONE);
 
-        AlertDialog.Builder builder = new AlertDialog.Builder(this, AlertDialog.THEME_HOLO_DARK);
-        builder.setTitle("Trainer Portal Notifications");
+        BottomSheetDialog dialog = new BottomSheetDialog(this);
+
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setPadding(40, 24, 40, 36);
+        root.setBackgroundResource(R.drawable.bg_bottom_sheet);
+
+        // Handle bar
+        View handle = new View(this);
+        LinearLayout.LayoutParams handleLp = new LinearLayout.LayoutParams(100, 10);
+        handleLp.gravity = android.view.Gravity.CENTER_HORIZONTAL;
+        handleLp.setMargins(0, 0, 0, 24);
+        handle.setLayoutParams(handleLp);
+        handle.setBackgroundResource(R.drawable.bg_input_default);
+        root.addView(handle);
+
+        // Header Title
+        TextView tvTitle = new TextView(this);
+        tvTitle.setText("🔔 TRAINER NOTIFICATIONS");
+        tvTitle.setTextColor(Color.WHITE);
+        tvTitle.setTextSize(18);
+        tvTitle.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        tvTitle.setPadding(0, 0, 0, 16);
+        root.addView(tvTitle);
+
+        // Notifications content container
+        LinearLayout contentLayout = new LinearLayout(this);
+        contentLayout.setOrientation(LinearLayout.VERTICAL);
+        contentLayout.setBackgroundResource(R.drawable.bg_action_card);
+        contentLayout.setPadding(24, 20, 24, 20);
 
         if (currentTrainer == null || currentTrainer.notifications == null || currentTrainer.notifications.isEmpty()) {
-            builder.setMessage("No new notifications.");
+            TextView tvEmpty = new TextView(this);
+            tvEmpty.setText("No new notifications.");
+            tvEmpty.setTextColor(Color.parseColor("#94A3B8"));
+            tvEmpty.setTextSize(13);
+            contentLayout.addView(tvEmpty);
         } else {
-            String[] array = currentTrainer.notifications.toArray(new String[0]);
-            builder.setItems(array, null);
+            for (int i = currentTrainer.notifications.size() - 1; i >= 0; i--) {
+                String notifText = currentTrainer.notifications.get(i);
+                TextView tvItem = new TextView(this);
+                tvItem.setText("• " + notifText);
+                tvItem.setTextColor(Color.parseColor("#E2E8F0"));
+                tvItem.setTextSize(13);
+                tvItem.setPadding(0, 8, 0, 8);
+                contentLayout.addView(tvItem);
+            }
         }
+        root.addView(contentLayout);
 
-        builder.setPositiveButton("Clear All", (dialog, which) -> {
+        // Action Buttons Row
+        LinearLayout btnRow = new LinearLayout(this);
+        btnRow.setOrientation(LinearLayout.HORIZONTAL);
+        btnRow.setPadding(0, 24, 0, 0);
+
+        // Clear All Button
+        LinearLayout btnClear = new LinearLayout(this);
+        btnClear.setOrientation(LinearLayout.HORIZONTAL);
+        btnClear.setGravity(android.view.Gravity.CENTER);
+        btnClear.setBackgroundResource(R.drawable.bg_button_selector);
+        btnClear.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.parseColor("#DC2626")));
+        btnClear.setPadding(24, 20, 24, 20);
+        LinearLayout.LayoutParams clearLp = new LinearLayout.LayoutParams(0, android.view.ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        clearLp.setMargins(0, 0, 8, 0);
+        btnClear.setLayoutParams(clearLp);
+
+        TextView tvClear = new TextView(this);
+        tvClear.setText("Clear All");
+        tvClear.setTextColor(Color.WHITE);
+        tvClear.setTextSize(14);
+        tvClear.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        btnClear.addView(tvClear);
+
+        btnClear.setOnClickListener(v -> {
+            dialog.dismiss();
             if (currentTrainer != null && currentTrainer.notifications != null) {
                 currentTrainer.notifications.clear();
                 if (currentTrainer.id != null && !currentTrainer.id.isEmpty()) {
@@ -311,8 +375,33 @@ public class TrainerDashboardActivity extends AppCompatActivity {
             updateTrainerNotificationBadge();
             Toast.makeText(this, "Notifications cleared", Toast.LENGTH_SHORT).show();
         });
-        builder.setNegativeButton("Close", null);
-        builder.show();
+        btnRow.addView(btnClear);
+
+        // Close Button
+        LinearLayout btnClose = new LinearLayout(this);
+        btnClose.setOrientation(LinearLayout.HORIZONTAL);
+        btnClose.setGravity(android.view.Gravity.CENTER);
+        btnClose.setBackgroundResource(R.drawable.bg_button_selector);
+        btnClose.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.parseColor("#334155")));
+        btnClose.setPadding(24, 20, 24, 20);
+        LinearLayout.LayoutParams closeLp = new LinearLayout.LayoutParams(0, android.view.ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        closeLp.setMargins(8, 0, 0, 0);
+        btnClose.setLayoutParams(closeLp);
+
+        TextView tvClose = new TextView(this);
+        tvClose.setText("Close");
+        tvClose.setTextColor(Color.WHITE);
+        tvClose.setTextSize(14);
+        tvClose.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        btnClose.addView(tvClose);
+
+        btnClose.setOnClickListener(v -> dialog.dismiss());
+        btnRow.addView(btnClose);
+
+        root.addView(btnRow);
+
+        dialog.setContentView(root);
+        dialog.show();
     }
 
     private void listenToTrainerBookingsRealtime() {
@@ -836,9 +925,8 @@ public class TrainerDashboardActivity extends AppCompatActivity {
                 isAssigned = true;
             } else {
                 for (Booking b : trainerBookings) {
-                    if ("Accepted".equalsIgnoreCase(b.status)
-                            && ((b.memberId != null && b.memberId.equalsIgnoreCase(m.id))
-                            || (b.memberEmail != null && m.email != null && b.memberEmail.equalsIgnoreCase(m.email)))) {
+                    if ((b.memberId != null && b.memberId.equalsIgnoreCase(m.id))
+                            || (b.memberEmail != null && m.email != null && b.memberEmail.equalsIgnoreCase(m.email))) {
                         isAssigned = true;
                         break;
                     }
@@ -1173,42 +1261,69 @@ public class TrainerDashboardActivity extends AppCompatActivity {
             if (pos >= 0 && pos < assigned.size()) {
                 Member m = assigned.get(pos);
                 String msgText = etChatMsg.getText().toString().trim();
-                if (!msgText.isEmpty()) {
-                    List<String> chat = getChatLogForMember(m.email);
-                    chat.add("Trainer: " + msgText);
-                    etChatMsg.setText("");
-                    updateChatHistory(m);
+                if (!msgText.isEmpty() && currentTrainer != null) {
+                    String trainerEmail = currentTrainer.email != null ? currentTrainer.email : "";
+                    String memberEmail = m.email != null ? m.email : "";
+                    String chatId = memberEmail.toLowerCase() + "_" + trainerEmail.toLowerCase();
 
-                    // Simulate reply
-                    new Handler().postDelayed(() -> {
-                        if (!isFinishing()) {
-                            chat.add(m.name + ": Thanks, coach! I will follow these instructions.");
-                            updateChatHistory(m);
-                        }
-                    }, 1500);
+                    Map<String, Object> msgDoc = new HashMap<>();
+                    msgDoc.put("chatId", chatId);
+                    msgDoc.put("senderEmail", trainerEmail);
+                    msgDoc.put("senderName", currentTrainer.name != null ? currentTrainer.name : "Trainer");
+                    msgDoc.put("senderRole", "trainer");
+                    msgDoc.put("receiverEmail", memberEmail);
+                    msgDoc.put("receiverName", m.name);
+                    msgDoc.put("message", msgText);
+                    msgDoc.put("timestamp", com.google.firebase.Timestamp.now());
+
+                    db.collection("chats").add(msgDoc);
+                    etChatMsg.setText("");
                 }
             }
         });
     }
 
-    private List<String> getChatLogForMember(String email) {
-        if (!memberChatLogs.containsKey(email)) {
-            List<String> list = new ArrayList<>();
-            list.add("[System] Secure encryption active.");
-            list.add("Member: Hi trainer, what is my schedule today?");
-            list.add("Trainer: Hello! Your routine and plans have been updated. Check them on your dashboard.");
-            memberChatLogs.put(email, list);
-        }
-        return memberChatLogs.get(email);
-    }
+    private ListenerRegistration trainerChatListener;
 
     private void updateChatHistory(Member m) {
-        List<String> chat = getChatLogForMember(m.email);
-        StringBuilder sb = new StringBuilder();
-        for (String s : chat) {
-            sb.append(s).append("\n\n");
-        }
-        tvChatHistory.setText(sb.toString());
+        if (m == null || currentTrainer == null) return;
+        String trainerEmail = currentTrainer.email != null ? currentTrainer.email : "";
+        String memberEmail = m.email != null ? m.email : "";
+
+        String chatId = memberEmail.toLowerCase() + "_" + trainerEmail.toLowerCase();
+
+        if (trainerChatListener != null) trainerChatListener.remove();
+
+        trainerChatListener = db.collection("chats")
+                .whereEqualTo("chatId", chatId)
+                .addSnapshotListener((snapshots, error) -> {
+                    if (isFinishing() || isDestroyed()) return;
+                    if (snapshots == null || snapshots.isEmpty()) {
+                        tvChatHistory.setText("💬 Secure Channel Active\nNo messages yet with " + m.name + ". Send a message below!");
+                        return;
+                    }
+
+                    List<DocumentSnapshot> docs = new ArrayList<>(snapshots.getDocuments());
+                    java.util.Collections.sort(docs, (d1, d2) -> {
+                        com.google.firebase.Timestamp t1 = d1.getTimestamp("timestamp");
+                        com.google.firebase.Timestamp t2 = d2.getTimestamp("timestamp");
+                        if (t1 == null || t2 == null) return 0;
+                        return t1.compareTo(t2);
+                    });
+
+                    StringBuilder sb = new StringBuilder();
+                    for (DocumentSnapshot doc : docs) {
+                        String senderRole = doc.getString("senderRole");
+                        String senderName = doc.getString("senderName");
+                        String msg = doc.getString("message");
+                        if (msg == null) continue;
+
+                        boolean isMe = "trainer".equalsIgnoreCase(senderRole);
+                        String displayName = isMe ? "You (Trainer)" : (senderName != null ? senderName : "Member");
+                        sb.append(displayName).append(":\n").append(msg).append("\n\n");
+                    }
+                    tvChatHistory.setText(sb.toString().trim());
+                });
     }
 
     // Helper conversion

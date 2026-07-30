@@ -87,6 +87,7 @@ public class ManageMembersActivity extends AppCompatActivity {
             @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
             @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
                 adapter.filter(s.toString());
+                updateEmptyState();
             }
             @Override public void afterTextChanged(Editable s) {}
         });
@@ -142,7 +143,7 @@ public class ManageMembersActivity extends AppCompatActivity {
     }
 
     private void updateEmptyState() {
-        if (memberList.isEmpty()) {
+        if (adapter == null || adapter.getItemCount() == 0) {
             layoutEmpty.setVisibility(View.VISIBLE);
             rvMembers.setVisibility(View.GONE);
         } else {
