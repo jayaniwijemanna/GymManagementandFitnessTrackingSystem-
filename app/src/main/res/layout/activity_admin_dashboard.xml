@@ -142,11 +142,12 @@
                     </LinearLayout>
 
                     <TextView
+                        android:id="@+id/tv_stat_members"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="12dp"
                         android:fontFamily="sans-serif-bold"
-                        android:text="1,247"
+                        android:text="..."
                         android:textColor="@color/text_white"
                         android:textSize="24sp"
                         android:textStyle="bold" />
@@ -188,11 +189,12 @@
                     </FrameLayout>
 
                     <TextView
+                        android:id="@+id/tv_stat_trainers"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="12dp"
                         android:fontFamily="sans-serif-bold"
-                        android:text="24"
+                        android:text="..."
                         android:textColor="@color/text_white"
                         android:textSize="24sp"
                         android:textStyle="bold" />
@@ -234,11 +236,12 @@
                     </FrameLayout>
 
                     <TextView
+                        android:id="@+id/tv_stat_revenue"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="12dp"
                         android:fontFamily="sans-serif-bold"
-                        android:text="$45,890"
+                        android:text="..."
                         android:textColor="@color/text_white"
                         android:textSize="24sp"
                         android:textStyle="bold" />
@@ -280,11 +283,12 @@
                     </FrameLayout>
 
                     <TextView
+                        android:id="@+id/tv_stat_attendance"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="12dp"
                         android:fontFamily="sans-serif-bold"
-                        android:text="189"
+                        android:text="..."
                         android:textColor="@color/text_white"
                         android:textSize="24sp"
                         android:textStyle="bold" />
@@ -632,7 +636,70 @@
             </LinearLayout>
         </LinearLayout>
 
-        <!-- Row 4: Generate Reports (Full Width) -->
+        <!-- Row 4: Pending Plan Requests (Full Width) -->
+        <LinearLayout
+            android:id="@+id/action_pending_requests"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/bg_action_card"
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?android:attr/selectableItemBackground"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:padding="16dp">
+
+            <FrameLayout
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="@drawable/bg_icon_orange">
+
+                <ImageView
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_gravity="center"
+                    android:contentDescription="Pending Requests"
+                    android:src="@drawable/ic_calendar"
+                    android:tint="@color/white" />
+            </FrameLayout>
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="14dp"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="sans-serif-bold"
+                    android:text="Pending Plan Requests"
+                    android:textColor="@color/text_white"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:fontFamily="sans-serif"
+                    android:text="Approve or Reject member plan requests"
+                    android:textColor="@color/text_gray"
+                    android:textSize="11sp" />
+            </LinearLayout>
+
+            <ImageView
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:contentDescription="Go"
+                android:src="@drawable/ic_arrow_forward"
+                android:tint="@color/text_gray" />
+        </LinearLayout>
+
+        <!-- Row 5: Generate Reports (Full Width) -->
+
         <LinearLayout
             android:id="@+id/action_reports"
             android:layout_width="match_parent"

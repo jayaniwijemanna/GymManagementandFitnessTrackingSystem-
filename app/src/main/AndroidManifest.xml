@@ -60,6 +60,9 @@
         <activity
             android:name=".TrainerDashboardActivity"
             android:exported="false" />
+        <activity
+            android:name=".PendingPlanRequestsActivity"
+            android:exported="false" />
     </application>
 
 </manifest>
