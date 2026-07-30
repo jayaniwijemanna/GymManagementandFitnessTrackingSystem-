@@ -31,16 +31,36 @@ import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.firestore.DocumentReference;
+import com.google.firebase.firestore.DocumentSnapshot;
+import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.ListenerRegistration;
+
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 public class MemberDashboardActivity extends AppCompatActivity {
 
     private Member currentMember;
+
+    // Firestore
+    private FirebaseFirestore db;
+    private FirebaseAuth mAuth;
+    private ListenerRegistration memberListener;
+    private ListenerRegistration packagesListener;
+    private ListenerRegistration trainersListener;
+
+    // Local list references from DataStore (kept in sync by Firestore listeners)
+    private final List<GymPackage> packageList = DataStore.getInstance().packages;
+    private final List<Trainer> trainerList = DataStore.getInstance().trainers;
 
     // Header views
     private TextView tvHeaderInitials, tvHeaderName;
@@ -60,7 +80,9 @@ public class MemberDashboardActivity extends AppCompatActivity {
     private TextView tvHomePlanName, tvHomePlanStatus, tvHomePlanDesc;
     private TextView tvHomeCheckinStatus, tvHomeCheckinBadge;
     private TextView tvHomeBookingInfo, tvHomeWorkoutPlan, tvHomeDietPlan, tvHomeChatTrainerName;
-    private LinearLayout btnHomeBuyPlan, btnHomeCheckin, btnHomeBookTrainer, btnHomeChat;
+    private TextView tvPendingPlanInfo;
+    private LinearLayout btnHomeBuyPlan, btnHomeChangePlan, btnHomeCheckin, btnHomeBookTrainer, btnHomeChat;
+    private LinearLayout layoutPendingPlanInfo;
 
     // Programs Tab elements
     private LinearLayout layoutPackagesList, layoutTrainersList;
@@ -93,35 +115,242 @@ public class MemberDashboardActivity extends AppCompatActivity {
             return insets;
         });
 
-        // Identify logged-in member
-        String memberEmail = getIntent().getStringExtra("MEMBER_EMAIL");
-        currentMember = null;
-        if (!TextUtils.isEmpty(memberEmail)) {
-            for (Member m : DataStore.getInstance().members) {
-                if (m.email.equalsIgnoreCase(memberEmail)) {
-                    currentMember = m;
-                    break;
-                }
-            }
-        }
-        // Fallback for safety
-        if (currentMember == null) {
-            if (!DataStore.getInstance().members.isEmpty()) {
-                currentMember = DataStore.getInstance().members.get(0);
-            } else {
-                currentMember = new Member("Default User", "member@gmail.com", "555-0000", "None", "password");
-                DataStore.getInstance().members.add(currentMember);
-            }
-        }
+        db = FirebaseFirestore.getInstance();
+        mAuth = FirebaseAuth.getInstance();
 
         initializeViews();
         setupNavigation();
+
+        // Load data from Firestore
+        String memberEmail = getIntent().getStringExtra("MEMBER_EMAIL");
+        loadMemberFromFirestore(memberEmail);
+        listenToPackagesRealtime();
+        listenToTrainersRealtime();
+    }
+
+    // ==================== FIRESTORE DATA LOADING ====================
+
+    /**
+     * Loads the current member's document from Firestore in real-time.
+     * First tries to match by Firebase Auth UID, then falls back to email query.
+     */
+    private void loadMemberFromFirestore(String memberEmail) {
+        FirebaseUser firebaseUser = mAuth.getCurrentUser();
+
+        if (firebaseUser != null) {
+            // Primary: listen to authenticated user's doc by UID
+            String uid = firebaseUser.getUid();
+            memberListener = db.collection("users").document(uid)
+                    .addSnapshotListener((snapshot, error) -> {
+                        if (error != null) {
+                            Toast.makeText(this, "Error loading profile: " + error.getMessage(), Toast.LENGTH_SHORT).show();
+                            fallbackLoadByEmail(memberEmail);
+                            return;
+                        }
+                        if (snapshot != null && snapshot.exists()) {
+                            Member m = snapshot.toObject(Member.class);
+                            if (m != null) {
+                                m.id = snapshot.getId();
+                                // Preserve runtime-only fields (notifications, waterIntake) if member already loaded
+                                if (currentMember != null) {
+                                    m.notifications = currentMember.notifications;
+                                    m.waterIntake = currentMember.waterIntake;
+                                    m.weightHistory = currentMember.weightHistory;
+                                }
+                                currentMember = m;
+                                // Update DataStore reference
+                                syncMemberToDataStore(m);
+                                onMemberLoaded();
+                            }
+                        } else {
+                            fallbackLoadByEmail(memberEmail);
+                        }
+                    });
+        } else {
+            fallbackLoadByEmail(memberEmail);
+        }
+    }
+
+    /**
+     * Fallback: query by email if no Firebase Auth session (e.g. offline login).
+     */
+    private void fallbackLoadByEmail(String memberEmail) {
+        if (TextUtils.isEmpty(memberEmail)) {
+            // Last resort: use DataStore or create a temporary member
+            if (!DataStore.getInstance().members.isEmpty()) {
+                currentMember = DataStore.getInstance().members.get(0);
+            } else {
+                currentMember = new Member("Guest User", "guest@gmail.com", "N/A", "None");
+            }
+            onMemberLoaded();
+            return;
+        }
+
+        db.collection("users").whereEqualTo("email", memberEmail)
+                .whereEqualTo("role", "member")
+                .get()
+                .addOnSuccessListener(querySnapshot -> {
+                    if (!querySnapshot.isEmpty()) {
+                        DocumentSnapshot doc = querySnapshot.getDocuments().get(0);
+                        Member m = doc.toObject(Member.class);
+                        if (m != null) {
+                            m.id = doc.getId();
+                            currentMember = m;
+                            syncMemberToDataStore(m);
+                            // Now attach a real-time listener on this doc for live updates
+                            attachMemberDocumentListener(doc.getId());
+                        } else {
+                            currentMember = new Member("Unknown", memberEmail, "N/A", "None");
+                        }
+                    } else {
+                        // Not found in Firestore — check DataStore in-memory
+                        currentMember = null;
+                        for (Member m : DataStore.getInstance().members) {
+                            if (m.email.equalsIgnoreCase(memberEmail)) {
+                                currentMember = m;
+                                break;
+                            }
+                        }
+                        if (currentMember == null) {
+                            currentMember = new Member("Unknown", memberEmail, "N/A", "None");
+                        }
+                    }
+                    onMemberLoaded();
+                })
+                .addOnFailureListener(e -> {
+                    Toast.makeText(this, "Failed to load profile: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                    // Use DataStore fallback
+                    for (Member m : DataStore.getInstance().members) {
+                        if (m.email.equalsIgnoreCase(memberEmail)) {
+                            currentMember = m;
+                            break;
+                        }
+                    }
+                    if (currentMember == null) {
+                        currentMember = new Member("Unknown", memberEmail, "N/A", "None");
+                    }
+                    onMemberLoaded();
+                });
+    }
+
+    /**
+     * Attach a real-time snapshot listener to a member document (by doc ID).
+     * Used after the fallback email query to keep data live.
+     */
+    private void attachMemberDocumentListener(String docId) {
+        if (memberListener != null) {
+            memberListener.remove();
+        }
+        memberListener = db.collection("users").document(docId)
+                .addSnapshotListener((snapshot, error) -> {
+                    if (error != null || snapshot == null || !snapshot.exists()) return;
+                    Member m = snapshot.toObject(Member.class);
+                    if (m != null) {
+                        m.id = snapshot.getId();
+                        // Preserve runtime-only transient fields
+                        if (currentMember != null) {
+                            m.notifications = currentMember.notifications;
+                            m.waterIntake = currentMember.waterIntake;
+                        }
+                        currentMember = m;
+                        syncMemberToDataStore(m);
+                        // Refresh UI if already initialized
+                        refreshHomeTab();
+                        refreshFitnessTab();
+                    }
+                });
+    }
+
+    /**
+     * Keep the DataStore member list in sync (replace or add the current member).
+     */
+    private void syncMemberToDataStore(Member m) {
+        List<Member> members = DataStore.getInstance().members;
+        for (int i = 0; i < members.size(); i++) {
+            if (members.get(i).email.equalsIgnoreCase(m.email)) {
+                members.set(i, m);
+                return;
+            }
+        }
+        members.add(m);
+    }
+
+    /**
+     * Called once the current member object is populated.
+     */
+    private void onMemberLoaded() {
         setupHeader();
         refreshHomeTab();
         setupProgramsTab();
         setupFitnessTab();
         setupFeedbackTab();
     }
+
+    /**
+     * Real-time listener for the 'packages' Firestore collection.
+     */
+    private void listenToPackagesRealtime() {
+        packagesListener = db.collection("packages").addSnapshotListener((value, error) -> {
+            if (error != null) {
+                Toast.makeText(this, "Error loading packages: " + error.getMessage(), Toast.LENGTH_SHORT).show();
+                return;
+            }
+            if (value != null) {
+                packageList.clear();
+                for (DocumentSnapshot doc : value.getDocuments()) {
+                    GymPackage pkg = doc.toObject(GymPackage.class);
+                    if (pkg != null) {
+                        pkg.id = doc.getId();
+                        packageList.add(pkg);
+                    }
+                }
+                // Refresh programs tab if member is already loaded
+                if (currentMember != null) {
+                    setupProgramsTab();
+                    refreshHomeTab(); // Package description might have changed
+                }
+            }
+        });
+    }
+
+    /**
+     * Real-time listener for all trainers in the 'users' collection.
+     */
+    private void listenToTrainersRealtime() {
+        trainersListener = db.collection("users").whereEqualTo("role", "trainer")
+                .addSnapshotListener((value, error) -> {
+                    if (error != null) {
+                        Toast.makeText(this, "Error loading trainers: " + error.getMessage(), Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    if (value != null) {
+                        trainerList.clear();
+                        for (DocumentSnapshot doc : value.getDocuments()) {
+                            Trainer t = doc.toObject(Trainer.class);
+                            if (t != null) {
+                                t.id = doc.getId();
+                                trainerList.add(t);
+                            }
+                        }
+                        // Refresh programs & feedback tabs if member is loaded
+                        if (currentMember != null) {
+                            setupProgramsTab();
+                            setupFeedbackTab();
+                        }
+                    }
+                });
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        // Clean up Firestore listeners to avoid memory leaks
+        if (memberListener != null) memberListener.remove();
+        if (packagesListener != null) packagesListener.remove();
+        if (trainersListener != null) trainersListener.remove();
+    }
+
+    // ==================== VIEW INITIALIZATION ====================
 
     private void initializeViews() {
         // Header
@@ -164,6 +393,9 @@ public class MemberDashboardActivity extends AppCompatActivity {
         tvHomeDietPlan = findViewById(R.id.tv_home_diet_plan);
         tvHomeChatTrainerName = findViewById(R.id.tv_home_chat_trainer_name);
         btnHomeBuyPlan = findViewById(R.id.btn_home_buy_plan);
+        btnHomeChangePlan = findViewById(R.id.btn_home_change_plan);
+        layoutPendingPlanInfo = findViewById(R.id.layout_pending_plan_info);
+        tvPendingPlanInfo = findViewById(R.id.tv_pending_plan_info);
         btnHomeCheckin = findViewById(R.id.btn_home_checkin);
         btnHomeBookTrainer = findViewById(R.id.btn_home_book_trainer);
         btnHomeChat = findViewById(R.id.btn_home_chat);
@@ -198,6 +430,7 @@ public class MemberDashboardActivity extends AppCompatActivity {
     }
 
     private void setupHeader() {
+        if (currentMember == null) return;
         tvHeaderName.setText(currentMember.name);
         tvHeaderInitials.setText(currentMember.getInitials());
 
@@ -207,6 +440,7 @@ public class MemberDashboardActivity extends AppCompatActivity {
         btnNotifications.setOnClickListener(v -> showNotificationsDialog());
 
         btnLogout.setOnClickListener(v -> {
+            mAuth.signOut();
             Toast.makeText(this, "Logged out securely.", Toast.LENGTH_SHORT).show();
             Intent intent = new Intent(MemberDashboardActivity.this, MainActivity.class);
             intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
@@ -216,7 +450,7 @@ public class MemberDashboardActivity extends AppCompatActivity {
     }
 
     private void updateNotificationBadge() {
-        if (currentMember.notifications.isEmpty()) {
+        if (currentMember == null || currentMember.notifications.isEmpty()) {
             viewNotificationBadge.setVisibility(View.GONE);
         } else {
             viewNotificationBadge.setVisibility(View.VISIBLE);
@@ -230,7 +464,7 @@ public class MemberDashboardActivity extends AppCompatActivity {
         AlertDialog.Builder builder = new AlertDialog.Builder(this, AlertDialog.THEME_HOLO_DARK);
         builder.setTitle("Notifications Alert");
 
-        if (currentMember.notifications.isEmpty()) {
+        if (currentMember == null || currentMember.notifications.isEmpty()) {
             builder.setMessage("No new notifications.");
         } else {
             String[] array = currentMember.notifications.toArray(new String[0]);
@@ -238,7 +472,7 @@ public class MemberDashboardActivity extends AppCompatActivity {
         }
 
         builder.setPositiveButton("Clear All", (dialog, which) -> {
-            currentMember.notifications.clear();
+            if (currentMember != null) currentMember.notifications.clear();
             updateNotificationBadge();
             Toast.makeText(this, "Notifications cleared", Toast.LENGTH_SHORT).show();
         });
@@ -277,6 +511,7 @@ public class MemberDashboardActivity extends AppCompatActivity {
             case 1:
                 viewPrograms.setVisibility(View.VISIBLE);
                 highlightTab(imgNavPrograms, tvNavPrograms);
+                setupProgramsTab();
                 break;
             case 2:
                 viewFitness.setVisibility(View.VISIBLE);
@@ -286,6 +521,7 @@ public class MemberDashboardActivity extends AppCompatActivity {
             case 3:
                 viewFeedback.setVisibility(View.VISIBLE);
                 highlightTab(imgNavFeedback, tvNavFeedback);
+                setupFeedbackTab();
                 break;
         }
     }
@@ -302,36 +538,105 @@ public class MemberDashboardActivity extends AppCompatActivity {
 
     // ==================== TAB 1: HOME ====================
     private void refreshHomeTab() {
-        // Membership Details
-        if (currentMember.plan == null || currentMember.plan.isEmpty() || currentMember.plan.equals("None")) {
-            tvHomePlanName.setText("No Active Package");
-            tvHomePlanStatus.setText("Inactive");
-            tvHomePlanStatus.setBackgroundResource(R.drawable.bg_badge);
-            tvHomePlanStatus.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.parseColor("#2A1A0D"))); // stat_orange_bg
-            tvHomePlanStatus.setTextColor(Color.parseColor("#FF9500"));
-            tvHomePlanDesc.setText("Purchase a training package in the Programs tab to gain access.");
-            btnHomeBuyPlan.setVisibility(View.VISIBLE);
-        } else {
+        if (currentMember == null) return;
+
+        boolean hasActivePlan = currentMember.plan != null && !currentMember.plan.trim().isEmpty()
+                && !currentMember.plan.equalsIgnoreCase("None") && !currentMember.plan.equalsIgnoreCase("No Package");
+
+        String status = currentMember.planStatus;
+        if (status == null || status.trim().isEmpty() || "None".equalsIgnoreCase(status)) {
+            if (hasActivePlan) {
+                status = "Active";
+                currentMember.planStatus = "Active";
+            } else {
+                status = "None";
+            }
+        }
+
+        // Hide all plan action buttons by default
+        btnHomeBuyPlan.setVisibility(View.GONE);
+        btnHomeChangePlan.setVisibility(View.GONE);
+        layoutPendingPlanInfo.setVisibility(View.GONE);
+
+        // --- ACTIVE plan ---
+        if ("Active".equalsIgnoreCase(status) && hasActivePlan) {
             tvHomePlanName.setText(currentMember.plan);
             tvHomePlanStatus.setText("Active");
             tvHomePlanStatus.setBackgroundResource(R.drawable.bg_badge);
-            tvHomePlanStatus.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.parseColor("#0D2818"))); // stat_green_bg
+            tvHomePlanStatus.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.parseColor("#0D2818")));
             tvHomePlanStatus.setTextColor(Color.parseColor("#34C759"));
-            
-            // Search package details
+
+            // Fetch package description from the live list
             String desc = "Your premium package allows access to standard gym areas.";
-            for (GymPackage p : DataStore.getInstance().packages) {
-                if (p.name.equalsIgnoreCase(currentMember.plan)) {
-                    desc = p.description;
+            for (GymPackage p : packageList) {
+                if (p.name != null && p.name.equalsIgnoreCase(currentMember.plan)) {
+                    if (p.description != null && !p.description.isEmpty()) desc = p.description;
                     break;
                 }
             }
             tvHomePlanDesc.setText(desc);
-            btnHomeBuyPlan.setVisibility(View.GONE);
+            btnHomeChangePlan.setVisibility(View.VISIBLE);
+
+        // --- PENDING approval ---
+        } else if ("Pending".equalsIgnoreCase(status)) {
+            String pendingName = (currentMember.pendingPlan != null && !currentMember.pendingPlan.isEmpty())
+                    ? currentMember.pendingPlan : "Requested Plan";
+
+            if (hasActivePlan) {
+                tvHomePlanName.setText(currentMember.plan);
+                tvHomePlanStatus.setText("Pending Change");
+                tvHomePlanStatus.setBackgroundResource(R.drawable.bg_badge);
+                tvHomePlanStatus.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.parseColor("#2A1A0D")));
+                tvHomePlanStatus.setTextColor(Color.parseColor("#FF9500"));
+
+                String desc = "Your active package remains usable while your request is processed.";
+                for (GymPackage p : packageList) {
+                    if (p.name != null && p.name.equalsIgnoreCase(currentMember.plan)) {
+                        if (p.description != null && !p.description.isEmpty()) desc = p.description;
+                        break;
+                    }
+                }
+                tvHomePlanDesc.setText(desc);
+                layoutPendingPlanInfo.setVisibility(View.VISIBLE);
+                tvPendingPlanInfo.setText("Request to change to \"" + pendingName + "\" is pending admin approval.");
+            } else {
+                tvHomePlanName.setText("No Active Plan");
+                tvHomePlanStatus.setText("Pending");
+                tvHomePlanStatus.setBackgroundResource(R.drawable.bg_badge);
+                tvHomePlanStatus.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.parseColor("#2A1A0D")));
+                tvHomePlanStatus.setTextColor(Color.parseColor("#FF9500"));
+                tvHomePlanDesc.setText("Your plan application is awaiting admin review and approval.");
+                layoutPendingPlanInfo.setVisibility(View.VISIBLE);
+                tvPendingPlanInfo.setText("Application for \"" + pendingName + "\" is pending admin approval.");
+            }
+
+        // --- REJECTED ---
+        } else if ("Rejected".equalsIgnoreCase(status)) {
+            String planDisplay = hasActivePlan ? currentMember.plan : "No Active Plan";
+            tvHomePlanName.setText(planDisplay);
+            tvHomePlanStatus.setText("Rejected");
+            tvHomePlanStatus.setBackgroundResource(R.drawable.bg_badge);
+            tvHomePlanStatus.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.parseColor("#2D1010")));
+            tvHomePlanStatus.setTextColor(Color.parseColor("#FF3B30"));
+            tvHomePlanDesc.setText("Your plan application was rejected. You may apply for a different plan.");
+            layoutPendingPlanInfo.setVisibility(View.VISIBLE);
+            tvPendingPlanInfo.setText("Application rejected. Please apply again from the Programs tab.");
+            tvPendingPlanInfo.setTextColor(Color.parseColor("#FF3B30"));
+            btnHomeBuyPlan.setVisibility(View.VISIBLE);
+
+        // --- NONE / No Plan ---
+        } else {
+            tvHomePlanName.setText("No Active Package");
+            tvHomePlanStatus.setText("Inactive");
+            tvHomePlanStatus.setBackgroundResource(R.drawable.bg_badge);
+            tvHomePlanStatus.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.parseColor("#2A1A0D")));
+            tvHomePlanStatus.setTextColor(Color.parseColor("#FF9500"));
+            tvHomePlanDesc.setText("Apply for a training package in the Programs tab to gain access.");
+            btnHomeBuyPlan.setVisibility(View.VISIBLE);
         }
 
         // Check in status
-        if (currentMember.checkedInTime.equals("Not Checked In")) {
+        if (currentMember.checkedInTime == null || currentMember.checkedInTime.equals("Not Checked In")) {
             tvHomeCheckinStatus.setText("Not Checked In Today");
             tvHomeCheckinBadge.setText("Absent");
             tvHomeCheckinBadge.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.parseColor("#2D1010")));
@@ -346,7 +651,7 @@ public class MemberDashboardActivity extends AppCompatActivity {
         }
 
         // Trainer booking
-        if (currentMember.bookedTrainer.equals("None")) {
+        if (currentMember.bookedTrainer == null || currentMember.bookedTrainer.equals("None")) {
             tvHomeBookingInfo.setText("No active personal trainer booking.");
             btnHomeBookTrainer.setVisibility(View.VISIBLE);
             tvHomeChatTrainerName.setText("No active personal trainer");
@@ -374,6 +679,7 @@ public class MemberDashboardActivity extends AppCompatActivity {
         }
 
         btnHomeBuyPlan.setOnClickListener(v -> selectTab(1));
+        btnHomeChangePlan.setOnClickListener(v -> selectTab(1));
         btnHomeBookTrainer.setOnClickListener(v -> selectTab(1));
         btnHomeCheckin.setOnClickListener(v -> triggerCheckinFlow());
         btnHomeChat.setOnClickListener(v -> openChatDialog());
@@ -383,19 +689,18 @@ public class MemberDashboardActivity extends AppCompatActivity {
         // Show simulated QR scanner dialog
         AlertDialog.Builder builder = new AlertDialog.Builder(this, AlertDialog.THEME_HOLO_DARK);
         LayoutInflater inflater = getLayoutInflater();
-        View dialogView = inflater.inflate(R.layout.activity_manage_attendance, null); // reuse background setup or structure
-        
-        // Let's dynamically construct a premium scan dialog
-        View scanLayout = inflater.inflate(R.layout.activity_verify_otp, null); // temp view layout
+
+        // Dynamically construct a premium scan dialog
+        View scanLayout = inflater.inflate(R.layout.activity_verify_otp, null);
         TextView header = scanLayout.findViewById(R.id.title_titan_gym);
         header.setText("QR SCANNER");
         TextView inst = scanLayout.findViewById(R.id.tv_otp_instructions);
         inst.setText("Align gym QR code within the frame to check in.");
-        
+
         // Replace input box with scan line simulation
         LinearLayout inputGroup = (LinearLayout) scanLayout.findViewById(R.id.et_otp).getParent();
         inputGroup.removeAllViews();
-        
+
         TextView scanAnim = new TextView(this);
         scanAnim.setText("[ SCANNING CAMERA VIEW ]\n\n════════════════════");
         scanAnim.setTextColor(Color.parseColor("#34C759"));
@@ -403,7 +708,7 @@ public class MemberDashboardActivity extends AppCompatActivity {
         scanAnim.setPadding(0, 30, 0, 30);
         inputGroup.addView(scanAnim);
 
-        TextView note = scanLayout.findViewById(R.id.tv_cancel).findViewById(R.id.tv_cancel); // wait, it's just cancel
+        TextView note = scanLayout.findViewById(R.id.tv_cancel);
         note.setText("Searching for camera sensor...");
         note.setTextColor(Color.parseColor("#94A3B8"));
 
@@ -414,17 +719,26 @@ public class MemberDashboardActivity extends AppCompatActivity {
         AlertDialog dialog = builder.create();
         dialog.show();
 
-        // Simulate laser scanner line motion and successful scan in 2 seconds
+        // Simulate laser scanner and successful scan in 2 seconds
         new Handler().postDelayed(() -> {
             if (dialog.isShowing()) {
                 dialog.dismiss();
-                
-                // Set present checked-in
+
+                // Set present checked-in time
                 SimpleDateFormat sdf = new SimpleDateFormat("hh:mm a", Locale.getDefault());
-                currentMember.checkedInTime = sdf.format(new Date());
-                currentMember.notifications.add("Checked in successfully at " + currentMember.checkedInTime);
+                String checkinTime = sdf.format(new Date());
+                currentMember.checkedInTime = checkinTime;
+                currentMember.notifications.add("Checked in successfully at " + checkinTime);
                 updateNotificationBadge();
                 refreshHomeTab();
+
+                // Persist check-in to Firestore
+                if (currentMember.id != null && !currentMember.id.isEmpty()) {
+                    db.collection("users").document(currentMember.id)
+                            .update("checkedInTime", checkinTime)
+                            .addOnFailureListener(e ->
+                                    Toast.makeText(this, "Check-in saved locally only.", Toast.LENGTH_SHORT).show());
+                }
 
                 Toast.makeText(this, "Gym Check-in Successful! Welcome to Titan.", Toast.LENGTH_LONG).show();
             }
@@ -435,152 +749,210 @@ public class MemberDashboardActivity extends AppCompatActivity {
 
     // ==================== TAB 2: PROGRAMS & BOOKING ====================
     private void setupProgramsTab() {
-        // Load Packages list
+        if (currentMember == null) return;
+
+        // Load Packages list from Firestore-synced packageList
         layoutPackagesList.removeAllViews();
         LayoutInflater inflater = LayoutInflater.from(this);
 
-        for (GymPackage p : DataStore.getInstance().packages) {
-            View pkgView = inflater.inflate(R.layout.item_member_package, layoutPackagesList, false);
-            TextView tvName = pkgView.findViewById(R.id.tv_pkg_name);
-            TextView tvPrice = pkgView.findViewById(R.id.tv_pkg_price);
-            TextView tvDesc = pkgView.findViewById(R.id.tv_pkg_desc);
-            TextView btnBuy = pkgView.findViewById(R.id.btn_pkg_buy);
+        boolean hasActivePlan = currentMember.plan != null && !currentMember.plan.trim().isEmpty()
+                && !currentMember.plan.equalsIgnoreCase("None") && !currentMember.plan.equalsIgnoreCase("No Package");
 
-            tvName.setText(p.name);
-            tvPrice.setText("$" + p.price + " / month");
-            tvDesc.setText(p.description);
+        String memberPlanStatus = currentMember.planStatus;
+        if (memberPlanStatus == null || memberPlanStatus.trim().isEmpty() || "None".equalsIgnoreCase(memberPlanStatus)) {
+            if (hasActivePlan) {
+                memberPlanStatus = "Active";
+                currentMember.planStatus = "Active";
+            } else {
+                memberPlanStatus = "None";
+            }
+        }
+        String memberPlan = currentMember.plan != null ? currentMember.plan : "";
+        String memberPendingPlan = currentMember.pendingPlan != null ? currentMember.pendingPlan : "";
 
-            btnBuy.setOnClickListener(v -> showPaymentDialog(p));
+        if (packageList.isEmpty()) {
+            TextView empty = new TextView(this);
+            empty.setText("No packages available. Check back later.");
+            empty.setTextColor(Color.parseColor("#94A3B8"));
+            empty.setPadding(0, 16, 0, 16);
+            layoutPackagesList.addView(empty);
+        } else {
+            for (GymPackage p : packageList) {
+                View pkgView = inflater.inflate(R.layout.item_member_package, layoutPackagesList, false);
+                TextView tvName = pkgView.findViewById(R.id.tv_pkg_name);
+                TextView tvPrice = pkgView.findViewById(R.id.tv_pkg_price);
+                TextView tvDesc = pkgView.findViewById(R.id.tv_pkg_desc);
+                TextView btnBuy = pkgView.findViewById(R.id.btn_pkg_buy);
 
-            layoutPackagesList.addView(pkgView);
+                tvName.setText(p.name);
+                tvPrice.setText("$" + p.price + " / month");
+                tvDesc.setText(p.description);
+
+                boolean isActivePlan = "Active".equalsIgnoreCase(memberPlanStatus)
+                        && p.name != null && p.name.equalsIgnoreCase(memberPlan);
+                boolean isPendingThisPlan = "Pending".equalsIgnoreCase(memberPlanStatus)
+                        && p.name != null && p.name.equalsIgnoreCase(memberPendingPlan);
+
+                if (isActivePlan) {
+                    // This is the current active plan
+                    btnBuy.setText("Active ✓");
+                    btnBuy.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.parseColor("#0D2818")));
+                    btnBuy.setTextColor(Color.parseColor("#34C759"));
+                    btnBuy.setClickable(false);
+                } else if (isPendingThisPlan) {
+                    // Application pending for this plan
+                    btnBuy.setText("Pending...");
+                    btnBuy.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.parseColor("#2A1A0D")));
+                    btnBuy.setTextColor(Color.parseColor("#FF9500"));
+                    btnBuy.setClickable(false);
+                } else if ("Pending".equalsIgnoreCase(memberPlanStatus)) {
+                    // Another plan is pending — allow changing the pending application
+                    btnBuy.setText("Switch Apply");
+                    btnBuy.setOnClickListener(v -> showPlanApplicationDialog(p, true));
+                } else if ("Active".equalsIgnoreCase(memberPlanStatus)) {
+                    // Member has an active plan — allow requesting change
+                    btnBuy.setText("Change to This");
+                    btnBuy.setOnClickListener(v -> showPlanApplicationDialog(p, false));
+                } else {
+                    // No plan or rejected — allow fresh application
+                    btnBuy.setText("Apply");
+                    btnBuy.setOnClickListener(v -> showPlanApplicationDialog(p, false));
+                }
+
+                layoutPackagesList.addView(pkgView);
+            }
         }
 
-        // Load Trainers list
+        // Load Trainers list from Firestore-synced trainerList
         layoutTrainersList.removeAllViews();
-        for (Trainer t : DataStore.getInstance().trainers) {
-            View trnView = inflater.inflate(R.layout.item_member_trainer, layoutTrainersList, false);
-            TextView tvInitials = trnView.findViewById(R.id.tv_trn_initials);
-            TextView tvName = trnView.findViewById(R.id.tv_trn_name);
-            TextView tvSpec = trnView.findViewById(R.id.tv_trn_spec);
-            TextView btnBook = trnView.findViewById(R.id.btn_trn_book);
+        if (trainerList.isEmpty()) {
+            TextView empty = new TextView(this);
+            empty.setText("No trainers available at the moment.");
+            empty.setTextColor(Color.parseColor("#94A3B8"));
+            empty.setPadding(0, 16, 0, 16);
+            layoutTrainersList.addView(empty);
+        } else {
+            for (Trainer t : trainerList) {
+                View trnView = inflater.inflate(R.layout.item_member_trainer, layoutTrainersList, false);
+                TextView tvInitials = trnView.findViewById(R.id.tv_trn_initials);
+                TextView tvName = trnView.findViewById(R.id.tv_trn_name);
+                TextView tvSpec = trnView.findViewById(R.id.tv_trn_spec);
+                TextView btnBook = trnView.findViewById(R.id.btn_trn_book);
 
-            tvInitials.setText(t.getInitials());
-            tvName.setText(t.name);
-            tvSpec.setText(t.specialization);
+                tvInitials.setText(t.getInitials());
+                tvName.setText(t.name);
+                tvSpec.setText(t.specialization);
 
-            btnBook.setOnClickListener(v -> showBookingDialog(t));
+                // Show 'Booked' state if this trainer is already booked
+                if (t.name != null && t.name.equalsIgnoreCase(currentMember.bookedTrainer)) {
+                    btnBook.setText("Booked ✓");
+                    btnBook.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.parseColor("#0D2818")));
+                    btnBook.setTextColor(Color.parseColor("#34C759"));
+                    btnBook.setClickable(false);
+                } else {
+                    btnBook.setOnClickListener(v -> showBookingDialog(t));
+                }
 
-            layoutTrainersList.addView(trnView);
+                layoutTrainersList.addView(trnView);
+            }
         }
     }
 
-    private void showPaymentDialog(GymPackage pkg) {
+    /**
+     * Shows a plan application dialog.
+     * @param pkg The package the member wants to apply for.
+     * @param isSwitch true if the member already has a pending application and wants to switch it.
+     */
+    private void showPlanApplicationDialog(GymPackage pkg, boolean isSwitch) {
         AlertDialog.Builder builder = new AlertDialog.Builder(this, AlertDialog.THEME_HOLO_DARK);
-        builder.setTitle("Select Payment Method");
 
-        // Custom Layout
+        boolean hasActivePlan = "Active".equalsIgnoreCase(currentMember.planStatus)
+                && currentMember.plan != null && !currentMember.plan.isEmpty()
+                && !currentMember.plan.equals("None");
+
+        String title = isSwitch ? "Switch Plan Application"
+                : hasActivePlan ? "Request Plan Change" : "Apply for Membership Plan";
+        builder.setTitle(title);
+
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(40, 30, 40, 30);
 
+        // Package info
         TextView info = new TextView(this);
-        info.setText("Package: " + pkg.name + "\nPrice: $" + pkg.price + ".00");
+        info.setText("Package: " + pkg.name + "\nPrice: $" + pkg.price + " / month\n\n" + pkg.description);
         info.setTextColor(Color.WHITE);
-        info.setTextSize(16);
+        info.setTextSize(15);
         info.setLineSpacing(1.2f, 1.2f);
         root.addView(info);
 
-        // Spacer
-        View spacer1 = new View(this);
-        spacer1.setMinimumHeight(24);
-        root.addView(spacer1);
+        // Admin approval notice
+        View divider = new View(this);
+        divider.setMinimumHeight(20);
+        root.addView(divider);
 
-        RadioGroup group = new RadioGroup(this);
-        RadioButton rbCard = new RadioButton(this);
-        rbCard.setText("Credit / Debit Card");
-        rbCard.setTextColor(Color.WHITE);
-        RadioButton rbPaypal = new RadioButton(this);
-        rbPaypal.setText("PayPal Secure Account");
-        rbPaypal.setTextColor(Color.WHITE);
-        RadioButton rbCash = new RadioButton(this);
-        rbCash.setText("Cash Desk Payment");
-        rbCash.setTextColor(Color.WHITE);
+        TextView notice = new TextView(this);
+        notice.setText("⚠  Your application will be submitted for admin verification. Once approved, the plan will be activated on your account.");
+        notice.setTextColor(Color.parseColor("#FF9500"));
+        notice.setTextSize(13);
+        notice.setLineSpacing(1.2f, 1.2f);
+        root.addView(notice);
 
-        group.addView(rbCard);
-        group.addView(rbPaypal);
-        group.addView(rbCash);
-        rbCard.setChecked(true);
-        root.addView(group);
+        if (hasActivePlan) {
+            View divider2 = new View(this);
+            divider2.setMinimumHeight(12);
+            root.addView(divider2);
 
-        // Fields Container
-        LinearLayout fieldsLayout = new LinearLayout(this);
-        fieldsLayout.setOrientation(LinearLayout.VERTICAL);
-        fieldsLayout.setPadding(0, 20, 0, 10);
-
-        // Card Details Input Fields
-        EditText etCard = new EditText(this);
-        etCard.setHint("Card Number (16-digits)");
-        etCard.setTextColor(Color.WHITE);
-        etCard.setHintTextColor(Color.GRAY);
-        etCard.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
-        fieldsLayout.addView(etCard);
-
-        root.addView(fieldsLayout);
-
-        // Switch inputs dynamically
-        rbCard.setOnCheckedChangeListener((btn, checked) -> {
-            if (checked) {
-                fieldsLayout.removeAllViews();
-                etCard.setHint("Card Number (16-digits)");
-                etCard.setText("");
-                fieldsLayout.addView(etCard);
-            }
-        });
-        rbPaypal.setOnCheckedChangeListener((btn, checked) -> {
-            if (checked) {
-                fieldsLayout.removeAllViews();
-                EditText etPaypal = new EditText(this);
-                etPaypal.setHint("PayPal Email ID");
-                etPaypal.setTextColor(Color.WHITE);
-                etPaypal.setHintTextColor(Color.GRAY);
-                fieldsLayout.addView(etPaypal);
-            }
-        });
-        rbCash.setOnCheckedChangeListener((btn, checked) -> {
-            if (checked) {
-                fieldsLayout.removeAllViews();
-                TextView cashInfo = new TextView(this);
-                cashInfo.setText("Please request physical cash activation of " + pkg.name + " package at the receptionist desk.");
-                cashInfo.setTextColor(Color.parseColor("#94A3B8"));
-                fieldsLayout.addView(cashInfo);
-            }
-        });
+            TextView changeNote = new TextView(this);
+            changeNote.setText("Current plan: " + currentMember.plan + " (remains active until admin approves the change).");
+            changeNote.setTextColor(Color.parseColor("#94A3B8"));
+            changeNote.setTextSize(12);
+            root.addView(changeNote);
+        }
 
         builder.setView(root);
-        builder.setPositiveButton("Complete Purchase", (dialog, which) -> {
-            // Check validations if cash is not selected
-            if (rbCard.isChecked() && etCard.getText().length() < 12) {
-                Toast.makeText(this, "Transaction declined: Invalid card details.", Toast.LENGTH_SHORT).show();
-                return;
-            }
-
-            ProgressDialog progress = new ProgressDialog(this, ProgressDialog.THEME_HOLO_DARK);
-            progress.setMessage("Securing payment link...");
-            progress.setCancelable(false);
-            progress.show();
-
-            new Handler().postDelayed(() -> {
-                progress.dismiss();
-                currentMember.plan = pkg.name;
-                currentMember.notifications.add("Purchase successful! Activated plan: " + pkg.name);
-                updateNotificationBadge();
-                refreshHomeTab();
-                Toast.makeText(this, pkg.name + " Activated successfully!", Toast.LENGTH_LONG).show();
-            }, 1800);
-        });
-
+        String confirmLabel = isSwitch ? "Switch Application" : hasActivePlan ? "Request Change" : "Submit Application";
+        builder.setPositiveButton(confirmLabel, (dialog, which) -> submitPlanApplication(pkg));
         builder.setNegativeButton("Cancel", null);
         builder.show();
+    }
+
+    /**
+     * Submits a plan application to Firestore with status = "Pending".
+     * The current active plan (if any) is preserved until admin approves the change.
+     */
+    private void submitPlanApplication(GymPackage pkg) {
+        ProgressDialog progress = new ProgressDialog(this, ProgressDialog.THEME_HOLO_DARK);
+        progress.setMessage("Submitting plan application...");
+        progress.setCancelable(false);
+        progress.show();
+
+        new Handler().postDelayed(() -> {
+            progress.dismiss();
+
+            // Update in-memory state
+            currentMember.pendingPlan = pkg.name;
+            currentMember.planStatus = "Pending";
+            currentMember.notifications.add("Plan application submitted for: " + pkg.name + ". Awaiting admin approval.");
+            updateNotificationBadge();
+            refreshHomeTab();
+            setupProgramsTab();
+
+            // Persist to Firestore
+            if (currentMember.id != null && !currentMember.id.isEmpty()) {
+                Map<String, Object> updates = new HashMap<>();
+                updates.put("pendingPlan", pkg.name);
+                updates.put("planStatus", "Pending");
+                db.collection("users").document(currentMember.id)
+                        .update(updates)
+                        .addOnSuccessListener(aVoid ->
+                                Toast.makeText(this, "Application submitted! Awaiting admin approval.", Toast.LENGTH_LONG).show())
+                        .addOnFailureListener(e ->
+                                Toast.makeText(this, "Saved locally. Sync error: " + e.getMessage(), Toast.LENGTH_SHORT).show());
+            } else {
+                Toast.makeText(this, "Application submitted! Awaiting admin approval.", Toast.LENGTH_LONG).show();
+            }
+        }, 1200);
     }
 
     private void showBookingDialog(Trainer trainer) {
@@ -607,8 +979,25 @@ public class MemberDashboardActivity extends AppCompatActivity {
                     currentMember.notifications.add("Booked personal training slot with " + trainer.name);
                     updateNotificationBadge();
                     refreshHomeTab();
+                    setupProgramsTab(); // Refresh to show "Booked ✓"
 
-                    Toast.makeText(this, "Trainer booked successfully for " + currentMember.bookedTime, Toast.LENGTH_LONG).show();
+                    // Persist booking to Firestore
+                    if (currentMember.id != null && !currentMember.id.isEmpty()) {
+                        Map<String, Object> updates = new HashMap<>();
+                        updates.put("bookedTrainer", trainer.name);
+                        updates.put("bookedTime", selectedDate + " at " + selectedTime);
+                        updates.put("bookingStatus", "Pending");
+
+                        db.collection("users").document(currentMember.id)
+                                .update(updates)
+                                .addOnSuccessListener(aVoid ->
+                                        Toast.makeText(this, "Trainer booked for " + currentMember.bookedTime, Toast.LENGTH_LONG).show())
+                                .addOnFailureListener(e ->
+                                        Toast.makeText(this, "Booking saved locally. Sync error: " + e.getMessage(), Toast.LENGTH_SHORT).show());
+                    } else {
+                        Toast.makeText(this, "Trainer booked for " + currentMember.bookedTime, Toast.LENGTH_LONG).show();
+                    }
+
                 }, 1500);
 
             }, 10, 0, true);
@@ -627,11 +1016,12 @@ public class MemberDashboardActivity extends AppCompatActivity {
 
     // ==================== TAB 3: FITNESS TRACKING ====================
     private void refreshFitnessTab() {
+        if (currentMember == null) return;
         tvWaterCount.setText(currentMember.waterIntake + " / 8 glasses");
 
         // Format and render weight log history
         StringBuilder sb = new StringBuilder();
-        if (currentMember.weightHistory.isEmpty()) {
+        if (currentMember.weightHistory == null || currentMember.weightHistory.isEmpty()) {
             sb.append("• No weights logged yet. Input values above to log progress.");
         } else {
             for (int i = currentMember.weightHistory.size() - 1; i >= 0; i--) {
@@ -682,6 +1072,7 @@ public class MemberDashboardActivity extends AppCompatActivity {
                 double bmi = w / (hMeters * hMeters);
 
                 // Add to log
+                if (currentMember.weightHistory == null) currentMember.weightHistory = new ArrayList<>();
                 currentMember.weightHistory.add(String.valueOf(w));
 
                 // Display
@@ -692,16 +1083,16 @@ public class MemberDashboardActivity extends AppCompatActivity {
                 int color;
                 if (bmi < 18.5) {
                     cat = "Underweight";
-                    color = Color.parseColor("#FF9500"); // orange
+                    color = Color.parseColor("#FF9500");
                 } else if (bmi < 24.9) {
                     cat = "Normal Weight";
-                    color = Color.parseColor("#34C759"); // green
+                    color = Color.parseColor("#34C759");
                 } else if (bmi < 29.9) {
                     cat = "Overweight";
                     color = Color.parseColor("#FF9500");
                 } else {
                     cat = "Obese";
-                    color = Color.parseColor("#FF3B30"); // red
+                    color = Color.parseColor("#FF3B30");
                 }
                 tvBmiCategory.setText(cat);
                 tvBmiCategory.setTextColor(color);
@@ -709,6 +1100,18 @@ public class MemberDashboardActivity extends AppCompatActivity {
                 currentMember.notifications.add("Calculated BMI: " + String.format(Locale.getDefault(), "%.1f", bmi) + " (" + cat + ")");
                 updateNotificationBadge();
                 refreshFitnessTab();
+
+                // Persist height, weight, and weight history to Firestore
+                if (currentMember.id != null && !currentMember.id.isEmpty()) {
+                    Map<String, Object> updates = new HashMap<>();
+                    updates.put("height", h);
+                    updates.put("weight", w);
+                    updates.put("weightHistory", currentMember.weightHistory);
+                    db.collection("users").document(currentMember.id)
+                            .update(updates)
+                            .addOnFailureListener(e ->
+                                    Toast.makeText(this, "BMI saved locally only.", Toast.LENGTH_SHORT).show());
+                }
 
                 Toast.makeText(this, "BMI calculated and Weight logged!", Toast.LENGTH_SHORT).show();
 
@@ -719,13 +1122,14 @@ public class MemberDashboardActivity extends AppCompatActivity {
 
         // Hydration tracker
         btnWaterMinus.setOnClickListener(v -> {
-            if (currentMember.waterIntake > 0) {
+            if (currentMember != null && currentMember.waterIntake > 0) {
                 currentMember.waterIntake--;
                 refreshFitnessTab();
             }
         });
 
         btnWaterPlus.setOnClickListener(v -> {
+            if (currentMember == null) return;
             currentMember.waterIntake++;
             refreshFitnessTab();
             if (currentMember.waterIntake == 8) {
@@ -738,10 +1142,10 @@ public class MemberDashboardActivity extends AppCompatActivity {
 
     // ==================== TAB 4: FEEDBACK & RATING ====================
     private void setupFeedbackTab() {
-        // Populate Spinner
+        // Populate Spinner with real trainers from Firestore
         List<String> list = new ArrayList<>();
         list.add("General Gym Experience");
-        for (Trainer t : DataStore.getInstance().trainers) {
+        for (Trainer t : trainerList) {
             list.add(t.name + " (" + t.specialization + ")");
         }
 
@@ -778,21 +1182,32 @@ public class MemberDashboardActivity extends AppCompatActivity {
 
             new Handler().postDelayed(() -> {
                 progress.dismiss();
-                currentMember.notifications.add("Submitted " + selectedRating + "-star rating feedback for " + item);
-                updateNotificationBadge();
+                if (currentMember != null) {
+                    currentMember.notifications.add("Submitted " + selectedRating + "-star rating feedback for " + item);
+                    updateNotificationBadge();
+                }
 
-                // Link feedback to trainer
+                // Link feedback to trainer in Firestore
                 if (!item.equals("General Gym Experience")) {
-                    for (Trainer t : DataStore.getInstance().trainers) {
+                    for (Trainer t : trainerList) {
                         if (item.startsWith(t.name)) {
-                            t.addFeedback(selectedRating + " ★ - \"" + feedbackMsg + "\" (by " + currentMember.name + ")");
+                            String reviewEntry = selectedRating + " ★ - \"" + feedbackMsg + "\" (by " + (currentMember != null ? currentMember.name : "Member") + ")";
+                            t.addFeedback(reviewEntry);
+
+                            // Persist feedback to Firestore trainer document
+                            if (t.id != null && !t.id.isEmpty()) {
+                                db.collection("users").document(t.id)
+                                        .update("feedback", t.feedback)
+                                        .addOnFailureListener(e ->
+                                                Toast.makeText(this, "Feedback saved locally only.", Toast.LENGTH_SHORT).show());
+                            }
                             break;
                         }
                     }
                 }
 
                 Toast.makeText(this, "Feedback submitted successfully. Thank you!", Toast.LENGTH_LONG).show();
-                
+
                 // Clear fields
                 setStarRating(0);
                 etFeedbackMsg.setText("");
@@ -813,36 +1228,36 @@ public class MemberDashboardActivity extends AppCompatActivity {
     }
 
     private void openChatDialog() {
-        if (currentMember.bookedTrainer.equals("None")) return;
-        
+        if (currentMember == null || currentMember.bookedTrainer == null || currentMember.bookedTrainer.equals("None")) return;
+
         AlertDialog.Builder builder = new AlertDialog.Builder(this, AlertDialog.THEME_HOLO_DARK);
         View dialogView = getLayoutInflater().inflate(R.layout.activity_verify_otp, null);
-        
+
         TextView title = dialogView.findViewById(R.id.title_titan_gym);
         title.setText("CHAT PORTAL");
-        
+
         TextView instructions = dialogView.findViewById(R.id.tv_otp_instructions);
         instructions.setText("Secure channel with " + currentMember.bookedTrainer);
-        
+
         EditText etMsg = dialogView.findViewById(R.id.et_otp);
         etMsg.setHint("Type your message...");
         etMsg.setInputType(android.text.InputType.TYPE_CLASS_TEXT);
-        
+
         TextView tvCancel = dialogView.findViewById(R.id.tv_cancel);
         tvCancel.setText("Close Chat");
-        
+
         LinearLayout btnSend = (LinearLayout) dialogView.findViewById(R.id.btn_verify);
         TextView btnSendText = (TextView) btnSend.getChildAt(0);
         btnSendText.setText("Send Message");
-        
+
         AlertDialog dialog = builder.setView(dialogView).create();
-        
+
         btnSend.setOnClickListener(v -> {
             String msg = etMsg.getText().toString().trim();
             if (msg.isEmpty()) return;
             Toast.makeText(this, "Message sent to " + currentMember.bookedTrainer, Toast.LENGTH_SHORT).show();
             etMsg.setText("");
-            
+
             // Auto response after 1.5 seconds
             new Handler().postDelayed(() -> {
                 if (!isFinishing()) {
@@ -850,7 +1265,7 @@ public class MemberDashboardActivity extends AppCompatActivity {
                 }
             }, 1500);
         });
-        
+
         tvCancel.setOnClickListener(v -> dialog.dismiss());
         dialog.show();
     }
