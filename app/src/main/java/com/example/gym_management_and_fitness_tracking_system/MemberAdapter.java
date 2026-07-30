@@ -88,9 +88,13 @@ public class MemberAdapter extends RecyclerView.Adapter<MemberAdapter.MemberView
         } else {
             String lower = query.toLowerCase();
             for (Member m : masterList) {
-                if (m.name.toLowerCase().contains(lower)
-                        || m.email.toLowerCase().contains(lower)
-                        || m.plan.toLowerCase().contains(lower)) {
+                if (m == null) continue;
+                String name = m.name != null ? m.name.toLowerCase() : "";
+                String email = m.email != null ? m.email.toLowerCase() : "";
+                String plan = m.plan != null ? m.plan.toLowerCase() : "";
+                String pendingPlan = m.pendingPlan != null ? m.pendingPlan.toLowerCase() : "";
+
+                if (name.contains(lower) || email.contains(lower) || plan.contains(lower) || pendingPlan.contains(lower)) {
                     filteredList.add(m);
                 }
             }
