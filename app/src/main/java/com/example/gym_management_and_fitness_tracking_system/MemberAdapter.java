@@ -43,15 +43,28 @@ public class MemberAdapter extends RecyclerView.Adapter<MemberAdapter.MemberView
         holder.tvInitials.setText(member.getInitials());
         holder.tvName.setText(member.name);
 
-        // Show plan name; fall back to "Active Member"
-        String planLabel = (member.plan == null || member.plan.isEmpty() || member.plan.equals("No Package"))
-                ? "No Package Assigned"
-                : member.plan;
+        // Show plan name and status (Pending / Active / No Package)
+        String planLabel;
+        int planColor;
+
+        if ("Pending".equalsIgnoreCase(member.planStatus)) {
+            String requested = (member.pendingPlan != null && !member.pendingPlan.isEmpty()) ? member.pendingPlan : "Plan";
+            if (member.plan != null && !member.plan.isEmpty() && !member.plan.equals("No Package") && !member.plan.equals("None")) {
+                planLabel = "Active: " + member.plan + "  •  Pending: " + requested;
+            } else {
+                planLabel = "Pending Application: " + requested;
+            }
+            planColor = 0xFFFF9500; // orange
+        } else if (member.plan != null && !member.plan.isEmpty() && !member.plan.equals("No Package") && !member.plan.equals("None")) {
+            planLabel = "Active Plan: " + member.plan;
+            planColor = 0xFF34C759; // accent_green
+        } else {
+            planLabel = "No Package Assigned";
+            planColor = 0xFFAAAAAA; // gray
+        }
+
         holder.tvPlan.setText(planLabel);
-        holder.tvPlan.setTextColor(
-                planLabel.equals("No Package Assigned")
-                        ? 0xFFAAAAAA   // gray
-                        : 0xFF34C759); // accent_green
+        holder.tvPlan.setTextColor(planColor);
 
         holder.btnEdit.setOnClickListener(v -> {
             int realIndex = masterList.indexOf(member);

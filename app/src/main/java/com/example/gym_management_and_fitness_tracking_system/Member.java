@@ -9,6 +9,8 @@ public class Member {
     public String email;
     public String phone;
     public String plan;
+    public String pendingPlan = "";   // The plan name the member has applied for (awaiting admin approval)
+    public String planStatus = "None"; // "None", "Pending", "Active", "Rejected"
     public String password;
     public String role = "member";
     public double height = 175.0; // cm
@@ -20,6 +22,7 @@ public class Member {
     public String dietPlan = "";
     public int waterIntake = 0;
     public List<String> weightHistory = new ArrayList<>();
+    public List<String> bookingHistory = new ArrayList<>();
     public List<String> notifications = new ArrayList<>();
     public String checkedInTime = "Not Checked In";
 

@@ -233,6 +233,57 @@ public class ManageMembersActivity extends AppCompatActivity {
             }
         }
 
+        // Handle Pending Plan Application Banner (Admin Verification)
+        LinearLayout layoutPendingCard = sheetView.findViewById(R.id.layout_pending_plan_card);
+        TextView tvPendingDetails = sheetView.findViewById(R.id.tv_pending_request_details);
+        Button btnApprovePlan = sheetView.findViewById(R.id.btn_approve_pending_plan);
+        Button btnRejectPlan = sheetView.findViewById(R.id.btn_reject_pending_plan);
+
+        if (isEdit && existing != null && "Pending".equalsIgnoreCase(existing.planStatus)) {
+            layoutPendingCard.setVisibility(View.VISIBLE);
+            String reqName = (existing.pendingPlan != null && !existing.pendingPlan.isEmpty()) ? existing.pendingPlan : "Requested Plan";
+            String activeName = (existing.plan != null && !existing.plan.isEmpty() && !existing.plan.equals("No Package") && !existing.plan.equals("None"))
+                    ? existing.plan : "None (No active plan)";
+
+            tvPendingDetails.setText("• Current Active Plan: " + activeName + "\n• Requested Plan: " + reqName);
+
+            btnApprovePlan.setOnClickListener(v -> {
+                if (existing.id != null && !existing.id.isEmpty()) {
+                    java.util.Map<String, Object> updates = new java.util.HashMap<>();
+                    updates.put("plan", reqName);
+                    updates.put("planStatus", "Active");
+                    updates.put("pendingPlan", "");
+
+                    db.collection("users").document(existing.id).update(updates)
+                        .addOnSuccessListener(aVoid -> Toast.makeText(ManageMembersActivity.this, "Approved " + reqName + " for " + existing.name, Toast.LENGTH_SHORT).show())
+                        .addOnFailureListener(e -> Toast.makeText(ManageMembersActivity.this, "Error approving: " + e.getMessage(), Toast.LENGTH_SHORT).show());
+                } else {
+                    existing.plan = reqName;
+                    existing.planStatus = "Active";
+                    existing.pendingPlan = "";
+                    Toast.makeText(ManageMembersActivity.this, "Approved " + reqName + " for " + existing.name, Toast.LENGTH_SHORT).show();
+                }
+                dialog.dismiss();
+            });
+
+            btnRejectPlan.setOnClickListener(v -> {
+                if (existing.id != null && !existing.id.isEmpty()) {
+                    java.util.Map<String, Object> updates = new java.util.HashMap<>();
+                    updates.put("planStatus", "Rejected");
+
+                    db.collection("users").document(existing.id).update(updates)
+                        .addOnSuccessListener(aVoid -> Toast.makeText(ManageMembersActivity.this, "Rejected plan application for " + existing.name, Toast.LENGTH_SHORT).show())
+                        .addOnFailureListener(e -> Toast.makeText(ManageMembersActivity.this, "Error rejecting: " + e.getMessage(), Toast.LENGTH_SHORT).show());
+                } else {
+                    existing.planStatus = "Rejected";
+                    Toast.makeText(ManageMembersActivity.this, "Rejected plan application for " + existing.name, Toast.LENGTH_SHORT).show();
+                }
+                dialog.dismiss();
+            });
+        } else {
+            layoutPendingCard.setVisibility(View.GONE);
+        }
+
         btnSave.setOnClickListener(v -> {
             String name = etName.getText().toString().trim();
             if (name.isEmpty()) { etName.setError("Name is required"); return; }
@@ -249,6 +300,11 @@ public class ManageMembersActivity extends AppCompatActivity {
                 existing.password = pass;
                 existing.plan = plan;
 
+                if (!"No Package".equals(plan) && !"None".equals(plan) && !plan.isEmpty()) {
+                    existing.planStatus = "Active";
+                    existing.pendingPlan = "";
+                }
+
                 if (existing.id != null && !existing.id.isEmpty()) {
                     db.collection("users").document(existing.id).set(existing)
                         .addOnSuccessListener(aVoid -> Toast.makeText(ManageMembersActivity.this, "Member updated!", Toast.LENGTH_SHORT).show())
@@ -260,6 +316,9 @@ public class ManageMembersActivity extends AppCompatActivity {
             } else {
                 DocumentReference newDoc = db.collection("users").document();
                 Member newMember = new Member(newDoc.getId(), name, email, phone, plan, pass);
+                if (!"No Package".equals(plan) && !"None".equals(plan) && !plan.isEmpty()) {
+                    newMember.planStatus = "Active";
+                }
 
                 newDoc.set(newMember)
                     .addOnSuccessListener(aVoid -> Toast.makeText(ManageMembersActivity.this, name + " added successfully!", Toast.LENGTH_SHORT).show())

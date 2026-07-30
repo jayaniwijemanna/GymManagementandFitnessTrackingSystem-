@@ -14,6 +14,7 @@ public class DataStore {
     public final List<Member> members = new ArrayList<>();
     public final List<Trainer> trainers = new ArrayList<>();
     public final List<GymPackage> packages = new ArrayList<>();
+    public final List<Booking> bookings = new ArrayList<>();
 
     private DataStore() {
         // Packages are dynamically loaded from Cloud Firestore collection 'packages'
