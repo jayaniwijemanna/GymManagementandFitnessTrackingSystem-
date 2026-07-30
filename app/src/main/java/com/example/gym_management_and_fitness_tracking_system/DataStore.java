@@ -16,10 +16,7 @@ public class DataStore {
     public final List<GymPackage> packages = new ArrayList<>();
 
     private DataStore() {
-        // Populate dummy packages
-        packages.add(new GymPackage("Elite Premium", "85", "Access to all gym areas, personal locker, 1 VIP trainer session/week, group classes & spa."));
-        packages.add(new GymPackage("Fitness Pro", "55", "Standard gym floor access, locker access, and 1 group fitness class/week."));
-        packages.add(new GymPackage("Basic Strength", "35", "Cardio and strength area access during off-peak hours (9 AM - 4 PM)."));
+        // Packages are dynamically loaded from Cloud Firestore collection 'packages'
 
         // Populate dummy trainers
         Trainer t1 = new Trainer("Alex Mercer", "Strength & Conditioning", "555-0199", "alex@gmail.com", "password");
