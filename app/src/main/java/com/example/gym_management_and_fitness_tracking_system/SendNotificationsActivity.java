@@ -149,8 +149,9 @@ public class SendNotificationsActivity extends AppCompatActivity {
                 return;
             }
 
-            // Write announcement entry into each user's announcements sub-collection
+            // Write announcement entry into each user's announcements sub-collection AND append to notifications array
             final int[] pendingWrites = {userIds.size()};
+            String notifItem = title + ": " + message;
             for (String uid : userIds) {
                 Map<String, Object> userAnnouncement = new HashMap<>();
                 userAnnouncement.put("announcementId", announcementId);
@@ -159,9 +160,14 @@ public class SendNotificationsActivity extends AppCompatActivity {
                 userAnnouncement.put("timestamp", System.currentTimeMillis());
                 userAnnouncement.put("read", false);
 
+                // 1. Write to subcollection
                 db.collection("users").document(uid)
                     .collection("announcements").document(announcementId)
-                    .set(userAnnouncement)
+                    .set(userAnnouncement);
+
+                // 2. Also append notification string to user doc 'notifications' array field
+                db.collection("users").document(uid)
+                    .update("notifications", com.google.firebase.firestore.FieldValue.arrayUnion(notifItem))
                     .addOnCompleteListener(task -> {
                         pendingWrites[0]--;
                         if (pendingWrites[0] == 0) {
